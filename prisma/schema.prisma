@@ -1,0 +1,171 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+// generator client {
+//   provider = "prisma-client-js"
+// }
+
+// datasource db {
+//   provider = "postgresql"
+//   url      = env("DATABASE_URL")
+// }
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User models for authentication and profile
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  fplTeamId     Int?
+  fplTeamName   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  leagueEntries LeagueEntry[]
+  transactions  Transaction[]
+  wallet        Wallet?
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// League models for tracking contests and entries
+model WeeklyLeague {
+  id                      String   @id @default(cuid())
+  name                    String
+  gameweek                Int
+  entryFee                Float
+  maxParticipants         Int
+  currentParticipants     Int      @default(0)
+  status                  String   @default("upcoming") // "upcoming", "active", "completed", "cancelled"
+  startDate               DateTime
+  endDate                 DateTime
+  platformFeePercentage   Float    @default(10)
+  minParticipantsRequired Int      @default(3)
+  tiebreaker              String   @default("goals_scored")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  prizeDistribution PrizeDistribution[]
+  entries           LeagueEntry[]
+}
+
+model PrizeDistribution {
+  id              String @id @default(cuid())
+  leagueId        String
+  position        Int
+  percentageShare Float
+
+  league WeeklyLeague @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+
+  @@unique([leagueId, position])
+}
+
+model LeagueEntry {
+  id            String   @id @default(cuid())
+  userId        String
+  leagueId      String
+  fplTeamId     Int
+  joinedAt      DateTime @default(now())
+  paid          Boolean  @default(false)
+  paymentId     String?
+  pointsAtStart Int?
+  finalPoints   Int?
+  weeklyPoints  Int?
+  rank          Int?
+  winnings      Float    @default(0)
+  payoutStatus  String? // "pending", "completed", "failed"
+
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  league WeeklyLeague @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, leagueId])
+}
+
+// Financial models for payment processing and transactions
+model Wallet {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  balance   Float    @default(0)
+  currency  String   @default("USD")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+}
+
+model Transaction {
+  id                String   @id @default(cuid())
+  userId            String
+  walletId          String
+  type              String // "deposit", "withdrawal", "entry_fee", "winnings", "refund"
+  amount            Float
+  currency          String   @default("USD")
+  status            String // "pending", "completed", "failed", "cancelled"
+  externalReference String? // Payment provider reference
+  description       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+}
+
+// FPL data caching
+model GameweekCache {
+  id          String   @id @default(cuid())
+  gameweekId  Int      @unique
+  status      String // "upcoming", "active", "completed"
+  startDate   DateTime
+  endDate     DateTime
+  fplData     Json? // Store JSON data from FPL API
+  lastUpdated DateTime @default(now())
+}
