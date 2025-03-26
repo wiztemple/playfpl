@@ -1,11 +1,14 @@
-// /components/shared/Loading.tsx
-import React from 'react';
+import React from "react";
+import { Loader2 } from "lucide-react";
 
-export default function Loading() {
+interface LoadingProps {
+  className?: string;
+}
+
+export default function Loading({ className = "" }: LoadingProps) {
   return (
-    <div className="flex flex-col items-center justify-center p-8">
-      <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-      <p className="mt-4 text-gray-600">Loading...</p>
+    <div className="flex justify-center items-center">
+      <Loader2 className={`h-8 w-8 animate-spin ${className}`} />
     </div>
   );
 }

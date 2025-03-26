@@ -50,8 +50,8 @@ export async function POST(request: Request) {
 
     // Create Stripe payment intent
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount * 100), // Convert to cents
-      currency: "usd",
+      amount: Math.round(amount * 100), // Convert to kobo (Nigerian cents)
+      currency: "ngn", // Changed from usd to ngn
       metadata: {
         userId: session.user.id,
         walletId: wallet.id,
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
         walletId: wallet.id,
         type: "deposit",
         amount,
-        currency: "USD",
+        currency: "NGN", // Changed from USD to NGN
         status: "pending",
         externalReference: paymentIntent.id,
       },

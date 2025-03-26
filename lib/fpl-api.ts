@@ -1,206 +1,3 @@
-// // /lib/fpl-api.ts
-// import { cache } from 'react';
-
-// const FPL_API_BASE = 'https://fantasy.premierleague.com/api';
-// const CACHE_DURATION = 60 * 5; // 5 minutes in seconds
-
-// // Cache wrapper for API requests
-// async function fetchWithCache(url: string, options: RequestInit = {}) {
-//   // Simple in-memory cache implementation
-//   const cacheKey = `fpl-cache:${url}`;
-
-//   // Check if we have a recent cache entry
-//   const cachedData = sessionStorage.getItem(cacheKey);
-//   if (cachedData) {
-//     const { data, timestamp } = JSON.parse(cachedData);
-//     const age = (Date.now() - timestamp) / 1000; // age in seconds
-
-//     if (age < CACHE_DURATION) {
-//       return data;
-//     }
-//   }
-
-//   // If not cached or cache expired, fetch fresh data
-//   const response = await fetch(url, options);
-
-//   if (!response.ok) {
-//     throw new Error(`API request failed: ${response.status}`);
-//   }
-
-//   const data = await response.json();
-
-//   // Cache the fresh data
-//   sessionStorage.setItem(
-//     cacheKey,
-//     JSON.stringify({ data, timestamp: Date.now() })
-//   );
-
-//   return data;
-// }
-
-// // Get basic FPL game information (bootstrap static)
-// export const getGameInfo = cache(async () => {
-//   try {
-//     return await fetchWithCache(`${FPL_API_BASE}/bootstrap-static/`);
-//   } catch (error) {
-//     console.error('Error fetching FPL game info:', error);
-//     throw error;
-//   }
-// });
-
-// // Get current gameweek information
-// export const getCurrentGameweek = cache(async () => {
-//   try {
-//     const gameInfo = await getGameInfo();
-//     return gameInfo.events.find((gw: any) => gw.is_current);
-//   } catch (error) {
-//     console.error('Error fetching current gameweek:', error);
-//     throw error;
-//   }
-// });
-
-// // Get specific gameweek information
-// export const getGameweek = cache(async (gameweekId: number) => {
-//   try {
-//     const gameInfo = await getGameInfo();
-//     return gameInfo.events.find((gw: any) => gw.id === gameweekId);
-//   } catch (error) {
-//     console.error(`Error fetching gameweek ${gameweekId}:`, error);
-//     throw error;
-//   }
-// });
-
-// // Get fixtures for a specific gameweek
-// export const getGameweekFixtures = cache(async (gameweekId: number) => {
-//   try {
-//     return await fetchWithCache(`${FPL_API_BASE}/fixtures/?event=${gameweekId}`);
-//   } catch (error) {
-//     console.error(`Error fetching fixtures for gameweek ${gameweekId}:`, error);
-//     throw error;
-//   }
-// });
-
-// // Get team details by ID
-// export const fetchFplTeam = cache(async (teamId: number | string) => {
-//   try {
-//     const response = await fetch(`${FPL_API_BASE}/entry/${teamId}/`);
-
-//     if (!response.ok) {
-//       if (response.status === 404) {
-//         return null; // Team not found
-//       }
-//       throw new Error(`Failed to fetch team: ${response.status}`);
-//     }
-
-//     return await response.json();
-//   } catch (error) {
-//     console.error(`Error fetching FPL team ${teamId}:`, error);
-//     throw error;
-//   }
-// });
-
-// // Get team points for a specific gameweek
-// export const getTeamGameweekPoints = cache(async (teamId: number | string, gameweekId: number) => {
-//   try {
-//     return await fetchWithCache(`${FPL_API_BASE}/entry/${teamId}/event/${gameweekId}/picks/`);
-//   } catch (error) {
-//     console.error(`Error fetching team ${teamId} points for gameweek ${gameweekId}:`, error);
-//     throw error;
-//   }
-// });
-
-// // Search for teams by name or manager name
-// export const searchTeams = async (query: string) => {
-//   // Note: FPL doesn't provide a search API, so this is a mock implementation
-//   // In a real app, you might need to maintain your own database of teams
-//   // For now, we'll return mock results
-
-//   // Simulating API request delay
-//   await new Promise(resolve => setTimeout(resolve, 500));
-
-//   // Mock search results
-//   const mockResults = [
-//     {
-//       id: 12345,
-//       name: "Team Awesome",
-//       player_name: "John Smith",
-//       total_points: 1234
-//     },
-//     {
-//       id: 67890,
-//       name: "Fantasy Kings",
-//       player_name: "Jane Doe",
-//       total_points: 1345
-//     },
-//     {
-//       id: 54321,
-//       name: "Premier Stars",
-//       player_name: "Mike Johnson",
-//       total_points: 1122
-//     }
-//   ];
-
-//   // Filter based on query
-//   return mockResults.filter(team =>
-//     team.name.toLowerCase().includes(query.toLowerCase()) ||
-//     team.player_name.toLowerCase().includes(query.toLowerCase())
-//   );
-// };
-
-// // API route implementations
-// // /app/api/fpl/team/[id]/route.ts
-// export async function fetchTeamApiHandler(teamId: string) {
-//   try {
-//     const team = await fetchFplTeam(teamId);
-
-//     if (!team) {
-//       return { status: 404, body: { error: 'Team not found' } };
-//     }
-
-//     return {
-//       status: 200,
-//       body: {
-//         id: team.id,
-//         name: team.name,
-//         player_name: team.player_first_name + ' ' + team.player_last_name,
-//         total_points: team.summary_overall_points
-//       }
-//     };
-//   } catch (error) {
-//     console.error(`Error in team API handler:`, error);
-//     return { status: 500, body: { error: 'Server error' } };
-//   }
-// }
-
-// // /app/api/fpl/search/route.ts
-// export async function searchTeamsApiHandler(query: string) {
-//   try {
-//     if (!query || query.length < 3) {
-//       return { status: 400, body: { error: 'Query must be at least 3 characters' } };
-//     }
-
-//     const results = await searchTeams(query);
-//     return { status: 200, body: results };
-//   } catch (error) {
-//     console.error(`Error in search API handler:`, error);
-//     return { status: 500, body: { error: 'Server error' } };
-//   }
-// }
-
-// // /app/api/fpl/gameweek/current/route.ts
-// export async function getCurrentGameweekApiHandler() {
-//   try {
-//     const currentGameweek = await getCurrentGameweek();
-//     return { status: 200, body: currentGameweek };
-//   } catch (error) {
-//     console.error(`Error in current gameweek API handler:`, error);
-//     return { status: 500, body: { error: 'Server error' } };
-//   }
-// }
-
-// /lib/fpl-api.ts
-import { cache } from "react";
-
 const FPL_API_BASE = "https://fantasy.premierleague.com/api";
 
 // Cache FPL API responses to reduce API calls
@@ -256,10 +53,46 @@ export async function getCurrentGameweek() {
 }
 
 // Get details for a specific gameweek
+// Add this new function to fetch fixtures
+async function getGameweekFixtures(gameweekId: number) {
+  try {
+    const response = await fetch(`${FPL_API_BASE}/fixtures/?event=${gameweekId}`);
+
+    if (!response.ok) {
+      throw new Error(`FPL API error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error(`Error getting fixtures for gameweek ${gameweekId}:`, error);
+    throw error;
+  }
+}
+
+// Modify the existing getGameweekInfo function
 export async function getGameweekInfo(gameweekId: number) {
   try {
-    const data = await getBootstrapStatic();
-    return data.events.find((gw: any) => gw.id === gameweekId) || null;
+    const [bootstrapData, fixturesData] = await Promise.all([
+      getBootstrapStatic(),
+      getGameweekFixtures(gameweekId)
+    ]);
+
+    const gameweek = bootstrapData.events.find((gw: any) => gw.id === gameweekId);
+    
+    if (!gameweek) {
+      return null;
+    }
+
+    // Find the last fixture of the gameweek
+    const sortedFixtures = fixturesData.sort((a: any, b: any) => 
+      new Date(b.kickoff_time).getTime() - new Date(a.kickoff_time).getTime()
+    );
+
+    return {
+      ...gameweek,
+      fixtures: fixturesData,
+      gameweek_end: sortedFixtures[0]?.kickoff_time // Last fixture's kickoff time
+    };
   } catch (error) {
     console.error(`Error getting gameweek ${gameweekId} info:`, error);
     throw error;

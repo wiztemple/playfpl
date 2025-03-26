@@ -6,7 +6,6 @@ import { getGameweekInfo } from "@/lib/fpl-api";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth-options";
 
-// Validation schema for league creation
 const createLeagueSchema = z.object({
   name: z
     .string()
@@ -27,29 +26,39 @@ const createLeagueSchema = z.object({
     .positive("Must allow at least 1 participant")
     .max(10000, "Maximum 10,000 participants"),
   startDate: z.string().datetime("Invalid start date format"),
-  endDate: z.string().datetime("Invalid end date format"),
-  prizeDistribution: z
-    .array(
-      z.object({
-        position: z
-          .number()
-          .int()
-          .positive("Position must be a positive number"),
-        percentageShare: z.number().positive("Percentage must be positive"),
-      })
-    )
-    .refine(
-      (data) => {
-        const total = data.reduce(
-          (sum, prize) => sum + prize.percentageShare,
-          0
-        );
-        return Math.abs(total - 100) < 0.01; // Allow for floating point imprecision
-      },
-      {
-        message: "Prize distribution must total 100%",
-      }
-    ),
+  leagueType: z.enum(['tri', 'duo', 'jackpot']),
+  prizeDistribution: z.array(
+    z.object({
+      position: z.number().int().positive("Position must be a positive number"),
+      percentageShare: z.number().positive("Percentage must be positive"),
+    })
+  )
+}).superRefine((data, ctx) => {
+  // Validate total percentage
+  const total = data.prizeDistribution.reduce(
+    (sum, prize) => sum + prize.percentageShare,
+    0
+  );
+  if (Math.abs(total - 100) >= 0.01) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Prize distribution must total 100%",
+      path: ["prizeDistribution"]
+    });
+  }
+
+  // Validate number of positions
+  const expectedPositions = data.leagueType === 'tri' ? 3 
+    : data.leagueType === 'duo' ? 2 
+    : 1;
+  
+  if (data.prizeDistribution.length !== expectedPositions) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Prize distribution must have ${expectedPositions} positions for ${data.leagueType} league type`,
+      path: ["prizeDistribution"]
+    });
+  }
 });
 
 export async function POST(request: Request) {
@@ -67,7 +76,7 @@ export async function POST(request: Request) {
 
     // Parse and validate request body
     const body = await request.json();
-    console.log("Raw request body:", body)
+    console.log("Raw request body:", body);
     const validationResult = createLeagueSchema.safeParse(body);
 
     if (!validationResult.success) {
@@ -81,73 +90,83 @@ export async function POST(request: Request) {
     }
 
     const data = validationResult.data;
+    console.log("Validated league type:", data.leagueType); // Add this line to debug
 
     // Validate gameweek exists in FPL
     try {
       const gameweekInfo = await getGameweekInfo(data.gameweek);
-
-      if (!gameweekInfo) {
-        return NextResponse.json(
-          {
-            error: `Gameweek ${data.gameweek} does not exist or is not available`,
-          },
-          { status: 400 }
-        );
-      }
-
-      // Validate dates against gameweek deadlines
+      console.log("Gameweek info:", gameweekInfo);
+      
+      // Use the actual gameweek deadline and end date
       const gameweekDeadline = new Date(gameweekInfo.deadline_time);
+      const gameweekEnd = new Date(gameweekInfo.gameweek_end);
       const startDate = new Date(data.startDate);
-      const endDate = new Date(data.endDate);
+      
+      // Set end date to 23:59:59.999 on the same day as the last fixture (April 3rd)
+      const endDate = new Date(gameweekEnd);
+      endDate.setHours(23, 59, 59, 999); // Use local time instead of UTC
 
-      if (startDate > endDate) {
+      console.log("Date calculations:", {
+        startDate,
+        gameweekDeadline,
+        gameweekEnd,
+        endDate
+      });
+
+      if (startDate > gameweekDeadline) {
         return NextResponse.json(
-          { error: "Start date must be before end date" },
+          { error: "Start date must be before the gameweek deadline" },
           { status: 400 }
         );
       }
 
-      if (endDate < gameweekDeadline) {
-        return NextResponse.json(
-          { error: "End date must be after the gameweek deadline" },
-          { status: 400 }
-        );
-      }
-    } catch (error) {
-      console.error("Error validating gameweek:", error);
-      // Continue without gameweek validation if FPL API is unavailable
-    }
-
-    // Create the league in the database
-    const league = await prisma.weeklyLeague.create({
-      data: {
+      // Create league data with calculated end date
+      const leagueData = {
         name: data.name,
         gameweek: data.gameweek,
         entryFee: data.entryFee,
         maxParticipants: data.maxParticipants,
         startDate: new Date(data.startDate),
-        endDate: new Date(data.endDate),
+        endDate: endDate,
         status: "upcoming",
-        platformFeePercentage: 10, // Default value
-        minParticipantsRequired: 3, // Default value
+        platformFeePercentage: 10,
+        minParticipantsRequired: 3,
+        leagueType: data.leagueType, // Remove the type casting
         prizeDistribution: {
           create: data.prizeDistribution.map((prize) => ({
             position: prize.position,
             percentageShare: prize.percentageShare,
           })),
         },
-      },
-      include: {
-        prizeDistribution: true,
-      },
-    });
+      };
+      console.log("League data to be created:", leagueData); // This log already exists
 
-    return NextResponse.json(league);
+      // Create the league in the database
+      const league = await prisma.weeklyLeague.create({
+        data: leagueData,
+        include: {
+          prizeDistribution: true,
+        },
+      });
+
+      return NextResponse.json(league);
+    } catch (error: any) {
+      console.error("Detailed error:", {
+        message: error.message,
+        code: error.code,
+        meta: error.meta,
+        stack: error.stack
+      });
+      return NextResponse.json(
+        { error: "Failed to create league", details: error.message },
+        { status: 500 }
+      );
+    }
   } catch (error) {
-    console.error("Error creating league:", error);
+    console.error("Error validating gameweek:", error);
     return NextResponse.json(
-      { error: "Failed to create league" },
-      { status: 500 }
+      { error: "Invalid gameweek or error fetching gameweek data" },
+      { status: 400 }
     );
   }
 }

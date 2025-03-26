@@ -7,7 +7,7 @@ export async function GET(
   context: { params: { id: string } }
 ) {
   try {
-    const id = context.params.id;
+    const { id } = context.params;
 
     // Find the league by ID
     const league = await prisma.weeklyLeague.findUnique({
@@ -21,6 +21,11 @@ export async function GET(
         _count: {
           select: { entries: true },
         },
+        entries: {
+          select: {
+            userId: true,
+          },
+        },
       },
     });
 
@@ -33,6 +38,7 @@ export async function GET(
       ...league,
       currentParticipants: league._count.entries,
       _count: undefined,
+      entries: undefined,
     };
 
     return NextResponse.json(formattedLeague);

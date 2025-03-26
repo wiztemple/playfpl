@@ -29,7 +29,7 @@ model User {
   email         String    @unique
   emailVerified DateTime?
   image         String?
-  fplTeamId     Int?
+  fplTeamId     Int?   @unique
   fplTeamName   String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -95,6 +95,7 @@ model WeeklyLeague {
 
   prizeDistribution PrizeDistribution[]
   entries           LeagueEntry[]
+  leagueType String // Add this field
 }
 
 model PrizeDistribution {

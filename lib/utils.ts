@@ -44,13 +44,13 @@ export function calculateTimeRemaining(dateString: string | Date) {
 /**
  * Formats currency values for display
  */
-export function formatCurrency(amount: number, currency = 'USD') {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2
+export const formatCurrency = (amount: number, currency: string = "NGN") => {
+  return new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: currency,
+    minimumFractionDigits: 2,
   }).format(amount);
-}
+};
 
 /**
  * Creates a debounce function to limit API calls

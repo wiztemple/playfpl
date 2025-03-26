@@ -31,44 +31,44 @@ export default function UserNav() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center gap-2 rounded-full border p-1 hover:shadow focus:outline-none">
-          <Avatar className="h-8 w-8">
+        <button className="flex items-center gap-2 rounded-full border border-gray-700 p-1 hover:border-indigo-500 transition-colors duration-200 focus:outline-none">
+          <Avatar className="h-8 w-8 bg-gray-800">
             <AvatarImage src={session.user.image || undefined} alt={session.user.name || 'User'} />
-            <AvatarFallback>{userInitials}</AvatarFallback>
+            <AvatarFallback className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white">{userInitials}</AvatarFallback>
           </Avatar>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end">
+      <DropdownMenuContent className="w-56 bg-gray-900 border border-gray-800 text-gray-300" align="end">
         <DropdownMenuLabel>
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium">{session.user.name}</p>
-            <p className="text-xs text-gray-500 truncate">{session.user.email}</p>
+            <p className="text-sm font-medium text-gray-200">{session.user.name}</p>
+            <p className="text-xs text-gray-400 truncate">{session.user.email}</p>
           </div>
         </DropdownMenuLabel>
-        <DropdownMenuSeparator />
+        <DropdownMenuSeparator className="bg-gray-800" />
         <DropdownMenuGroup>
-          <DropdownMenuItem asChild>
+          <DropdownMenuItem asChild className="focus:bg-gray-800 focus:text-indigo-400">
             <Link href="/profile" className="flex cursor-pointer items-center">
-              <User className="mr-2 h-4 w-4" />
+              <User className="mr-2 h-4 w-4 text-indigo-400" />
               <span>Profile</span>
             </Link>
           </DropdownMenuItem>
-          <DropdownMenuItem asChild>
+          <DropdownMenuItem asChild className="focus:bg-gray-800 focus:text-indigo-400">
             <Link href="/wallet" className="flex cursor-pointer items-center">
-              <Wallet className="mr-2 h-4 w-4" />
+              <Wallet className="mr-2 h-4 w-4 text-purple-400" />
               <span>Wallet</span>
             </Link>
           </DropdownMenuItem>
-          <DropdownMenuItem asChild>
+          <DropdownMenuItem asChild className="focus:bg-gray-800 focus:text-indigo-400">
             <Link href="/profile/settings" className="flex cursor-pointer items-center">
-              <Settings className="mr-2 h-4 w-4" />
+              <Settings className="mr-2 h-4 w-4 text-pink-400" />
               <span>Settings</span>
             </Link>
           </DropdownMenuItem>
         </DropdownMenuGroup>
-        <DropdownMenuSeparator />
+        <DropdownMenuSeparator className="bg-gray-800" />
         <DropdownMenuItem 
-          className="flex cursor-pointer items-center text-red-600 focus:text-red-600" 
+          className="flex cursor-pointer items-center text-red-400 focus:bg-gray-800 focus:text-red-400" 
           onClick={() => signOut()}
         >
           <LogOut className="mr-2 h-4 w-4" />

@@ -28,9 +28,16 @@ export interface PrizeDistribution {
     tiebreaker: string;
     createdAt: string;
     updatedAt: string;
+    leagueType: 'tri' | 'duo' | 'jackpot'; // Add this line
     prizeDistribution: PrizeDistribution[];
     myResults?: MyResults;
     hasJoined?: boolean;
+    gameweekInfo?: {
+      deadline_time: string;
+      is_current?: boolean;
+      is_next?: boolean;
+      finished?: boolean;
+    };
   }
   
   // League Entry Types

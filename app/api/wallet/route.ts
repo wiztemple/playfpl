@@ -29,7 +29,7 @@ export async function GET() {
         data: {
           userId: session.user.id,
           balance: 0,
-          currency: "USD",
+          currency: "NGN", // Changed from USD to NGN
         },
         include: {
           transactions: {
