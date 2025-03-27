@@ -29,8 +29,8 @@ export default function HomePage() {
       <div className="absolute bottom-0 -right-40 w-80 h-80 bg-purple-600/10 rounded-full blur-3xl"></div>
       
       <div className="container mx-auto px-4 py-12 relative z-10">
-        {/* Hero Section */}
-        <div className="max-w-4xl mx-auto text-center mb-24">
+        {/* Hero Section - Added pt-16 to create space below the navbar */}
+        <div className="max-w-4xl mx-auto text-center mb-24 pt-16 md:pt-20">
           <div className="inline-block mb-6 px-6 py-2 border border-indigo-500/30 rounded-full backdrop-blur-sm bg-indigo-950/30">
             <span className="text-sm font-medium text-indigo-300">Fantasy Premier League with Real Stakes</span>
           </div>
@@ -58,7 +58,7 @@ export default function HomePage() {
               </Link>
             )}
 
-            <Link href="/about">
+            <Link href="/how-it-works">
               <Button variant="outline" size="lg" className="border-indigo-500/50 text-indigo-400 hover:bg-indigo-950/50 backdrop-blur-sm">
                 How It Works
               </Button>

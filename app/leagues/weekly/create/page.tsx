@@ -420,17 +420,16 @@ export default function CreateLeaguePage() {
                   <div className="space-y-2">
                     <Label htmlFor="entryFee" className="text-gray-300">Entry Fee</Label>
                     <div className="relative">
-                      <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-green-400" />
                       <Input
                         id="entryFee"
                         name="entryFee"
                         type="number"
                         min="1"
-                        max="1000"
+                        max="20000"
                         step="0.01"
                         value={formData.entryFee}
                         onChange={handleInputChange}
-                        className={`pl-10 bg-gray-800/50 border-gray-700 text-gray-200 focus:border-indigo-600 focus:ring-indigo-600/20 ${validation.entryFee ? "border-red-700 focus:border-red-700" : ""}`}
+                        className={`bg-gray-800/50 border-gray-700 text-gray-200 focus:border-indigo-600 focus:ring-indigo-600/20 ${validation.entryFee ? "border-red-700 focus:border-red-700" : ""}`}
                       />
                     </div>
                     {validation.entryFee && (

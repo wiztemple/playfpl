@@ -19,7 +19,7 @@ const createLeagueSchema = z.object({
   entryFee: z
     .number()
     .positive("Entry fee must be positive")
-    .max(1000, "Maximum entry fee is $1,000"),
+    .max(20000, "Maximum entry fee is ₦20,000"),
   maxParticipants: z
     .number()
     .int()

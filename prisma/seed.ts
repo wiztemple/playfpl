@@ -13,6 +13,7 @@ async function main() {
       maxParticipants: 100,
       currentParticipants: 0,
       status: 'upcoming',
+      leagueType: "tri",
       startDate: new Date('2025-03-29T15:00:00Z'),
       endDate: new Date('2025-03-31T21:00:00Z'),
       platformFeePercentage: 10,

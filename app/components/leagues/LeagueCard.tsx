@@ -1,23 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Calendar,
-  DollarSign,
   Users,
-  Award,
-  Clock,
-  ArrowRight,
-  CheckCircle,
-  Sparkles,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
+  Card
 } from "../ui/card";
 import {
   formatDate,
@@ -25,8 +16,8 @@ import {
   formatCurrency,
 } from "@/lib/utils";
 import { WeeklyLeague } from "@/app/types";
-import CountdownTimer from "../CountdownTimer";
 import { motion } from "framer-motion";
+import Countdown from "../shared/Countdown";
 
 interface LeagueCardProps {
   league: WeeklyLeague;
@@ -41,7 +32,6 @@ export default function LeagueCard({
   onView,
   mode,
 }: LeagueCardProps) {
-  const [isHovered, setIsHovered] = useState(false);
 
   // Simple function to calculate prize pool without complex logic
   const calculatePrizePool = () => {
@@ -71,184 +61,152 @@ export default function LeagueCard({
     }
   };
 
+  // Format time remaining for display
+  const formatTimeRemaining = (date: string) => {
+    const now = new Date();
+    const target = new Date(date);
+
+    if (target < now) {
+      return "Active";
+    }
+
+    const diffTime = Math.abs(target.getTime() - now.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor((diffTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+    if (diffDays > 0) {
+      return `${diffDays}d ${diffHours}h`;
+    } else {
+      return `${diffHours}h`;
+    }
+  };
+
+  { console.log("League start date:", league.startDate) }
+
+  const [gameweekInfo, setGameweekInfo] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchGameweekInfo = async () => {
+      try {
+        const response = await fetch(`/api/gameweek/${league.gameweek}`);
+        if (response.ok) {
+          const data = await response.json();
+          setGameweekInfo(data);
+        }
+      } catch (error) {
+        console.error("Error fetching gameweek info:", error);
+      }
+    };
+
+    if (league.gameweek) {
+      fetchGameweekInfo();
+    }
+  }, [league.gameweek]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="transition-all duration-300"
+      className="h-full"
     >
-      <Card className="bg-gray-900 border border-gray-800 overflow-hidden backdrop-blur-sm relative transition-all duration-300 hover:border-gray-700 hover:shadow-md">
-        {/* Glassmorphism effect */}
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-900/50 to-black/50 backdrop-blur-[2px] pointer-events-none"></div>
-        
-        <CardHeader className="pb-2 relative z-10">
-          <div className="flex justify-between items-center">
-            <CardTitle className="text-lg font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-              {league.name}
-            </CardTitle>
-            <div
-              className={`px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r ${getStatusColors()} text-white shadow-lg`}
-            >
-              {league.status.charAt(0).toUpperCase() + league.status.slice(1)}
-            </div>
-          </div>
-        </CardHeader>
-        
-        <CardContent className="pb-2 relative z-10">
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="flex items-center">
-              <Calendar className="h-4 w-4 mr-2 text-indigo-400" />
-              <span className="text-sm text-gray-300">
-                Gameweek {league.gameweek}
-              </span>
-            </div>
-            <div className="flex items-center">
-              <DollarSign className="h-4 w-4 mr-2 text-purple-400" />
-              <span className="text-sm text-gray-300">
-                Entry: {formatCurrency(league.entryFee)}
-              </span>
-            </div>
-            <div className="flex items-center">
-              <Users className="h-4 w-4 mr-2 text-pink-400" />
-              <span className="text-sm text-gray-300">
-                {league.currentParticipants}/{league.maxParticipants} Players
-              </span>
-            </div>
-            <div className="flex items-center">
-              <Clock className="h-4 w-4 mr-2 text-cyan-400" />
-              <span className="text-sm text-gray-300">
-                {league.status === "upcoming"
-                  ? `Starts: ${new Date(league.startDate).toLocaleDateString()}`
-                  : `Ends: ${new Date(league.endDate).toLocaleDateString()}`}
-              </span>
-            </div>
-          </div>
+      <Card className="backdrop-blur-md bg-gray-900/60 border border-gray-800 shadow-xl hover:shadow-indigo-500/10 hover:border-indigo-500/50 transition-all duration-300 relative overflow-hidden h-full">
+        <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/10 to-purple-900/5 rounded-xl pointer-events-none"></div>
+        <div className="absolute -right-20 -top-20 w-40 h-40 bg-indigo-600/10 rounded-full blur-3xl"></div>
 
-          {league.status === "upcoming" && (
-            <div className="space-y-3 mb-4">
-              <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 border border-gray-700 p-3 rounded-lg backdrop-blur-sm transition-all duration-300 hover:border-gray-600">
-                <div className="text-sm text-gray-400 mb-1 flex items-center">
-                  <Sparkles className="h-3 w-3 mr-1 text-indigo-400" />
-                  League Starts In
-                </div>
-                <div className="font-mono text-lg font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-                  <CountdownTimer targetDate={league.startDate} />
-                </div>
-              </div>
-              
-              {league.gameweekInfo && (
-                <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 border border-gray-700 p-3 rounded-lg backdrop-blur-sm transition-all duration-300 hover:border-gray-600">
-                  <div className="text-sm text-gray-400 mb-1 flex items-center">
-                    <Sparkles className="h-3 w-3 mr-1 text-purple-400" />
-                    Gameweek Deadline
-                  </div>
-                  <div className="font-mono text-lg font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-                    <CountdownTimer targetDate={league.gameweekInfo.deadline_time} />
-                  </div>
-                </div>
+        <div className="p-5">
+          {/* Card Header - Like a debit card chip */}
+          <div className="flex justify-between items-start mb-3">
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 h-6 w-10 rounded-md"></div>
+            <div className="text-xs font-medium px-2 py-1 rounded-full bg-gray-800/80 text-gray-300">
+              {league.status === "active" ? (
+                <span className="flex items-center text-green-400">
+                  <span className="w-2 h-2 bg-green-400 rounded-full mr-1.5"></span>
+                  Live
+                </span>
+              ) : (
+                <span className="flex items-center">
+                  <Calendar className="w-3 h-3 mr-1" />
+                  {formatTimeRemaining(league.startDate)}
+                </span>
               )}
             </div>
-          )}
-
-          {league.prizeDistribution && (
-            <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 border border-gray-700 p-3 rounded-lg backdrop-blur-sm mb-4 transition-all duration-300 hover:border-gray-600">
-              <h4 className="font-medium text-sm mb-2 text-gray-200 flex items-center">
-                <Award className="h-4 w-4 mr-1 text-yellow-400" />
-                Prize Pool: {formatCurrency(prizePool, "NGN")}
-              </h4>
-              <div className="flex flex-wrap gap-2">
-                {league.prizeDistribution.map((prize) => (
-                  <span
-                    key={prize.position}
-                    className="flex items-center bg-gradient-to-r from-indigo-900/50 to-purple-900/50 border border-indigo-800/30 px-2 py-1 rounded-md text-xs text-gray-200 transition-all duration-300 hover:border-indigo-700/50"
-                  >
-                    <Award className="h-3 w-3 mr-1 text-yellow-400" />
-                    {prize.position}
-                    {prize.position === 1
-                      ? "st"
-                      : prize.position === 2
-                      ? "nd"
-                      : prize.position === 3
-                      ? "rd"
-                      : "th"}
-                    : {formatCurrency(prizePool * (prize.percentageShare / 100), "NGN")}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {mode === "joined" &&
-            league.myResults &&
-            league.status === "completed" && (
-              <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 border border-gray-700 p-3 rounded-lg backdrop-blur-sm mb-4 transition-all duration-300 hover:border-gray-600">
-                <h4 className="font-medium text-sm mb-2 text-gray-200 flex items-center">
-                  <Sparkles className="h-4 w-4 mr-1 text-indigo-400" />
-                  Your Results
-                </h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="text-sm">
-                    <div className="text-gray-400">Position</div>
-                    <div className="font-bold text-gray-200">
-                      {league.myResults.rank}/{league.currentParticipants}
-                    </div>
-                  </div>
-                  <div className="text-sm">
-                    <div className="text-gray-400">Points</div>
-                    <div className="font-bold text-gray-200">{league.myResults.points}</div>
-                  </div>
-                  <div className="text-sm">
-                    <div className="text-gray-400">Weekly Points</div>
-                    <div className="font-bold text-gray-200">
-                      {league.myResults.weeklyPoints}
-                    </div>
-                  </div>
-                  <div className="text-sm">
-                    <div className="text-gray-400">Winnings</div>
-                    <div className="font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
-                      {formatCurrency(league.myResults.winnings)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-        </CardContent>
-        
-        <CardFooter className="flex justify-between items-center pt-0 relative z-10 border-t border-gray-800">
-          <div className="text-xs text-gray-500">
-            {league.status === "upcoming"
-              ? `Starts: ${formatDate(league.startDate)}`
-              : `Ends: ${formatDate(league.endDate)}`}
           </div>
-          {league.hasJoined ? (
-            <div className="flex items-center text-green-400 font-medium">
-              <CheckCircle className="h-4 w-4 mr-1" />
-              Joined
+
+          {/* League Name */}
+          <h3 className="font-bold text-gray-100 text-lg mb-2 truncate">{league.name}</h3>
+
+          {/* Prize & Entry */}
+          <div className="flex justify-between items-center mb-3">
+            <div>
+              <p className="text-xs text-gray-400">Prize Pool</p>
+              <p className="text-md font-semibold text-gray-200">{formatCurrency(prizePool)}</p>
             </div>
+            <div className="text-right">
+              <p className="text-xs text-gray-400">Entry Fee</p>
+              <p className="text-md font-semibold text-gray-200">{formatCurrency(league.entryFee)}</p>
+            </div>
+          </div>
+
+          {/* Gameweek & Participants */}
+          <div className="flex justify-between items-center mb-3">
+            <div className="flex items-center">
+              <Calendar className="h-3.5 w-3.5 text-indigo-400 mr-1.5" />
+              <span className="text-xs text-gray-300">GW {league.gameweek}</span>
+            </div>
+            <div className="flex items-center">
+              <Users className="h-3.5 w-3.5 text-purple-400 mr-1.5" />
+              <span className="text-xs text-gray-300">
+                {league.currentParticipants}/{league.maxParticipants}
+              </span>
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="w-full bg-gray-800 rounded-full h-1.5 mb-4">
+            <div
+              className={`bg-gradient-to-r ${getStatusColors()} h-1.5 rounded-full`}
+              style={{ width: `${(league.currentParticipants / league.maxParticipants) * 100}%` }}
+            ></div>
+          </div>
+          {league.status === "upcoming" && gameweekInfo && gameweekInfo.deadline_time && (
+            <div className="mb-4">
+              <Countdown
+                targetDate={gameweekInfo.deadline_time}
+                label="Deadline"
+                variant="card"
+              />
+            </div>
+          )}
+
+          {/* Action Button */}
+          {league.hasJoined ? (
+            <Button
+              onClick={onView}
+              className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white border-0 flex items-center justify-center py-1.5 h-auto"
+            >
+              View League
+              <ChevronRight className="ml-1.5 h-3.5 w-3.5" />
+            </Button>
           ) : isJoinable ? (
-            <Button 
-              onClick={onJoin} 
-              className="flex items-center bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 border-0 transition-all duration-300"
+            <Button
+              onClick={onJoin}
+              className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white border-0 flex items-center justify-center py-1.5 h-auto"
             >
               Join League
-              <ArrowRight className="ml-1 h-4 w-4" />
+              <ChevronRight className="ml-1.5 h-3.5 w-3.5" />
             </Button>
           ) : (
             <Button
               onClick={onView}
-              variant={mode === "joined" ? "default" : "outline"}
-              className={`flex items-center transition-all duration-300 ${
-                mode === "joined" 
-                  ? "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 border-0" 
-                  : "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-indigo-400"
-              }`}
+              variant="outline"
+              className="w-full border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-indigo-400 flex items-center justify-center py-1.5 h-auto"
             >
               View Details
-              <ArrowRight className="ml-1 h-4 w-4" />
+              <ChevronRight className="ml-1.5 h-3.5 w-3.5" />
             </Button>
           )}
-        </CardFooter>
+        </div>
       </Card>
     </motion.div>
   );
