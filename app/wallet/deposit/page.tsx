@@ -13,6 +13,7 @@ import { Input } from '@/app/components/ui/input';
 import { formatCurrency } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import Loading from '@/app/components/shared/Loading';
+import { toast } from 'sonner';
 
 export default function DepositPage() {
   const { data: session, status } = useSession();
@@ -22,8 +23,8 @@ export default function DepositPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Quick amount options
-  const quickAmounts = [10, 25, 50, 100];
+  // Quick amount options - updated to Naira values
+  const quickAmounts = [500, 1000, 2000, 3000];
 
   // Check if user is authenticated
   useEffect(() => {
@@ -71,23 +72,40 @@ export default function DepositPage() {
       return;
     }
     
-    if (numAmount > 1000) {
-      setError('Maximum deposit amount is ₦1,000');
+    if (numAmount > 10000) {
+      setError('Maximum deposit amount is ₦10,000');
       return;
     }
     
     try {
       setIsProcessing(true);
       
-      // This is a mock implementation
-      // In a real app, you would call your payment API
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Call the deposit API
+      const response = await fetch('/api/wallet/deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: numAmount,
+          email: session?.user?.email,
+          name: session?.user?.name || 'FPL Player',
+        }),
+      });
       
-      // Redirect to wallet with success message
-      router.push('/wallet?success=deposit');
-    } catch (error) {
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to process deposit');
+      }
+      
+      // Redirect to Paystack payment page
+      window.location.href = data.paymentUrl;
+      
+    } catch (error: any) {
       console.error('Error processing deposit:', error);
-      setError('Failed to process your deposit. Please try again.');
+      setError(error.message || 'Failed to process your deposit. Please try again.');
+      toast.error('Deposit failed. Please try again.');
     } finally {
       setIsProcessing(false);
     }
@@ -102,7 +120,6 @@ export default function DepositPage() {
       </div>
     );
   }
-
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="container mx-auto py-12 px-4 max-w-md">
@@ -152,7 +169,7 @@ export default function DepositPage() {
                 <div className="space-y-2">
                   <Label htmlFor="amount" className="text-gray-300">Amount</Label>
                   <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-indigo-400" />
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-indigo-400">₦</span>
                     <Input
                       id="amount"
                       type="text"
@@ -188,7 +205,7 @@ export default function DepositPage() {
                           onClick={() => handleQuickAmount(quickAmount)}
                           className="w-full border-gray-700 bg-gray-800/50 text-gray-200 hover:bg-gray-700 hover:text-indigo-400"
                         >
-                          ${quickAmount}
+                          ₦{quickAmount.toLocaleString()}
                         </Button>
                       </motion.div>
                     ))}
@@ -231,7 +248,7 @@ export default function DepositPage() {
                     ) : (
                       <div className="flex items-center">
                         <Sparkles className="h-4 w-4 mr-2" />
-                        Deposit {amount ? formatCurrency(parseFloat(amount)) : '$0.00'}
+                        Deposit {amount ? `₦${parseFloat(amount).toLocaleString()}` : '₦0.00'}
                       </div>
                     )}
                   </Button>

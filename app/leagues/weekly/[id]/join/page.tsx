@@ -4,15 +4,15 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { 
-  ChevronLeft, 
-  AlertTriangle, 
-  CheckCircle, 
-  RefreshCw, 
-  Sparkles, 
-  DollarSign, 
-  Calendar, 
-  Users, 
+import {
+  ChevronLeft,
+  AlertTriangle,
+  CheckCircle,
+  RefreshCw,
+  Sparkles,
+  DollarSign,
+  Calendar,
+  Users,
   CreditCard,
   ArrowRight
 } from "lucide-react";
@@ -27,19 +27,19 @@ import {
 } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { toast } from 'sonner';
 import Loading from "@/app/components/shared/Loading";
 import { formatCurrency } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { useLeague } from "@/app/hooks/leagues";
+import { useUserProfile, useUpdateProfile } from "@/app/hooks/user";
+import { useVerifyFplTeam, useCheckTeamOwnership } from "@/app/hooks/fpl";
+import { useInitiatePayment } from "@/app/hooks/wallet";
 
 export default function JoinLeaguePage() {
   const { data: session, status } = useSession();
   const params = useParams();
   const router = useRouter();
-  const [league, setLeague] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fplTeamId, setFplTeamId] = useState("");
   const [step, setStep] = useState(1); // 1 = FPL Team, 2 = Payment
@@ -48,60 +48,39 @@ export default function JoinLeaguePage() {
     managerName: string;
     overallRank: number;
   } | null>(null);
-  const [userProfile, setUserProfile] = useState<any>(null);
 
   const leagueId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const isAuthenticated = status === 'authenticated';
 
-  // Fetch league details and user profile
+  // React Query hooks
+  const { data: league, isLoading: isLoadingLeague, error: leagueError } = useLeague(leagueId || '');
+  const { profile: userProfile, isLoading: isLoadingProfile } = useUserProfile();
+  const verifyTeam = useVerifyFplTeam();
+  const checkTeamOwnership = useCheckTeamOwnership();
+  const updateProfile = useUpdateProfile();
+  const initiatePaymentMutation = useInitiatePayment();
+
+  // Set initial FPL team ID from user profile
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        
-        // Fetch league details
-        const leagueResponse = await fetch(`/api/leagues/weekly/${leagueId}`);
-        if (!leagueResponse.ok) {
-          throw new Error("Failed to fetch league details");
-        }
-        const leagueData = await leagueResponse.json();
-        setLeague(leagueData);
-        
-        // Only fetch user profile if logged in
-        if (status === 'authenticated') {
-          const profileResponse = await fetch('/api/user/profile');
-          if (profileResponse.ok) {
-            const profileData = await profileResponse.json();
-            setUserProfile(profileData);
-            
-            // If user has a connected team, pre-fill and verify it
-            if (profileData.fplTeamId) {
-              setFplTeamId(profileData.fplTeamId.toString());
-              
-              // Optionally pre-verify the team
-              const verifyResponse = await fetch(`/api/fpl/verify-team?id=${profileData.fplTeamId}`);
-              if (verifyResponse.ok) {
-                const verifyData = await verifyResponse.json();
-                if (verifyData.valid) {
-                  setTeamInfo({
-                    teamName: verifyData.teamName || profileData.fplTeamName,
-                    managerName: verifyData.managerName || '',
-                    overallRank: verifyData.overallRank || 0
-                  });
-                }
-              }
+    if (userProfile?.fplTeamId) {
+      setFplTeamId(userProfile.fplTeamId.toString());
+      
+      // If user has a connected team, pre-verify it
+      if (userProfile.fplTeamId && !teamInfo) {
+        verifyTeam.mutate(userProfile.fplTeamId.toString(), {
+          onSuccess: (data) => {
+            if (data.verified) {
+              setTeamInfo({
+                teamName: data.teamName || userProfile.fplTeamName,
+                managerName: data.playerName || '',
+                overallRank: data.overallRank || 0
+              });
             }
           }
-        }
-      } catch (error) {
-        console.error("Error fetching data:", error);
-        setError("Failed to load information. Please try again.");
-      } finally {
-        setLoading(false);
+        });
       }
-    };
-
-    fetchData();
-  }, [leagueId, status]);
+    }
+  }, [userProfile]);
 
   // Check if user is authenticated
   useEffect(() => {
@@ -114,211 +93,188 @@ export default function JoinLeaguePage() {
     }
   }, [status, router, leagueId]);
 
+  // Handle errors from queries
+  useEffect(() => {
+    if (leagueError) {
+      setError("Failed to load league information. Please try again.");
+    }
+  }, [leagueError]);
+
   const handleFplTeamIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTeamId = e.target.value;
     setFplTeamId(newTeamId);
-    
+
     // If user tries to change to a different team ID than their connected one
-    if (userProfile?.fplTeamId && 
-        userProfile.fplTeamId.toString() !== newTeamId &&
-        newTeamId.trim() !== '') {
+    if (userProfile?.fplTeamId &&
+      userProfile.fplTeamId.toString() !== newTeamId &&
+      newTeamId.trim() !== '') {
       setError("You can only join leagues with your connected FPL team (ID: " + userProfile.fplTeamId + ")");
       return;
     }
-    
+
     // Reset team info when id changes
     if (teamInfo) {
       setTeamInfo(null);
     }
-    
+
     // Clear error when emptying field
     if (newTeamId === '') {
       setError(null);
     }
   };
 
-  const verifyFplTeam = async () => {
+  const verifyFplTeamHandler = async () => {
     if (!fplTeamId || isNaN(Number(fplTeamId))) {
       setError("Please enter a valid FPL Team ID");
       return false;
     }
-    
+
     // If user has a connected team, ensure they're using that team
-    if (userProfile?.fplTeamId && 
-        userProfile.fplTeamId.toString() !== fplTeamId) {
+    if (userProfile?.fplTeamId &&
+      userProfile.fplTeamId.toString() !== fplTeamId) {
       setError("You can only join leagues with your connected FPL team (ID: " + userProfile.fplTeamId + ")");
       return false;
     }
 
     try {
-      setVerifying(true);
       setError(null);
-
-      const response = await fetch(`/api/fpl/verify-team?id=${fplTeamId}`);
-      const data = await response.json();
-
-      if (!response.ok || !data.valid) {
-        setError(
-          data.error || "Invalid FPL Team ID. Please check and try again."
-        );
+      
+      // Use the verify team mutation
+      const data = await verifyTeam.mutateAsync(fplTeamId);
+      
+      if (!data.verified) {
+        setError(data.error || "Invalid FPL Team ID. Please check and try again.");
         setTeamInfo(null);
         return false;
       }
-      
-      // If this is a new team for the user, need to check if another user has claimed it
+
+      // If this is a new team for the user, check if another user has claimed it
       if (!userProfile?.fplTeamId || userProfile.fplTeamId.toString() !== fplTeamId) {
-        const ownershipResponse = await fetch('/api/user/check-team-ownership', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fplTeamId: parseInt(fplTeamId) })
-        });
-        
-        const ownershipData = await ownershipResponse.json();
-        
-        if (!ownershipResponse.ok) {
-          setError(ownershipData.error || "Failed to verify team ownership");
-          return false;
-        }
-        
-        if (ownershipData.isOwned && !ownershipData.isOwner) {
-          setError("This FPL team ID is already connected to another account");
+        try {
+          const ownershipData = await checkTeamOwnership.mutateAsync(parseInt(fplTeamId));
+          
+          if (ownershipData.isOwned && !ownershipData.isOwner) {
+            setError("This FPL team ID is already connected to another account");
+            return false;
+          }
+        } catch (error: any) {
+          setError(error.message || "Failed to verify team ownership");
           return false;
         }
       }
 
       setTeamInfo({
         teamName: data.teamName,
-        managerName: data.managerName,
-        overallRank: data.overallRank,
+        managerName: data.playerName,
+        overallRank: data.overallRank || 0,
       });
-      
+
       // If user doesn't have a team connected yet, connect it now
       if (!userProfile?.fplTeamId) {
         try {
-          const connectResponse = await fetch('/api/user/connect-team', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              fplTeamId: parseInt(fplTeamId),
-              fplTeamName: data.teamName 
-            })
+          await updateProfile.mutateAsync({
+            fplTeamId: parseInt(fplTeamId),
+            fplTeamName: data.teamName
           });
-          
-          if (connectResponse.ok) {
-            // Update local user profile state
-            setUserProfile({
-              ...userProfile,
-              fplTeamId: parseInt(fplTeamId),
-              fplTeamName: data.teamName
-            });
-            
-            toast.success("FPL team connected to your profile");
-          } else {
-            const connectData = await connectResponse.json();
-            if (connectData.error) {
-              setError(connectData.error);
-              return false;
-            }
-          }
-        } catch (error) {
+        } catch (error: any) {
           console.error("Error connecting team:", error);
           // Continue anyway as we still want to let them join the league
         }
       }
 
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error verifying team:", error);
       setError("Failed to verify team. Please try again.");
       return false;
-    } finally {
-      setVerifying(false);
     }
   };
 
   const handleContinueToPayment = async () => {
-    const isValid = await verifyFplTeam();
+    const isValid = await verifyFplTeamHandler();
     if (isValid) {
       setStep(2);
     }
   };
 
-  // const handleSubmitPayment = async () => {
-  //   try {
-  //     setSubmitting(true);
-  //     setError(null);
-
-  //     // Submit the join request to the API
-  //     const response = await fetch(`/api/leagues/weekly/${leagueId}/join`, {
-  //       method: "POST",
-  //       headers: {
-  //         "Content-Type": "application/json",
-  //       },
-  //       body: JSON.stringify({ fplTeamId }),
-  //     });
-
-  //     const data = await response.json();
-      
-  //     if (!response.ok) {
-  //       throw new Error(data.error || `Server error: ${response.status}`);
-  //     }
-
-  //     toast.success("Successfully joined the league!");
-      
-  //     // Success! Redirect to my leagues page
-  //     router.push("/leagues/my-leagues?success=true");
-  //   } catch (err: any) {
-  //     console.error("Error joining league:", err);
-  //     setError(err.message || "Failed to join league. Please try again.");
-  //   } finally {
-  //     setSubmitting(false);
-  //   }
-  // };
-
   const initiatePayment = async () => {
     try {
+      // Check if leagueId exists before proceeding
+      if (!leagueId) {
+        setError("League ID is missing. Please try again.");
+        return;
+      }
+
       setSubmitting(true);
       setError(null);
-      
-      // Prepare payment request
-      const response = await fetch(`/api/payment/initiate`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          leagueId,
-          fplTeamId,
-          amount: Math.round(league.entryFee * 100), // Convert to kobo (smallest currency unit)
-          email: session?.user?.email,
-          name: session?.user?.name || 'FPL Player',
-          metadata: {
-            league_name: league.name,
-            gameweek: league.gameweek,
-            team_name: teamInfo?.teamName || `Team ${fplTeamId}`
-          }
-        }),
-      });
-  
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to initiate payment");
-      }
+
+      const paymentData = {
+        leagueId: leagueId, // Now we know this is not undefined
+        fplTeamId,
+        amount: Math.round((league?.entryFee || 0) * 100), // Convert to kobo (smallest currency unit)
+        email: session?.user?.email || '', // Provide default empty string
+        name: session?.user?.name || 'FPL Player',
+        metadata: {
+          league_name: league?.name || 'Unknown League',
+          gameweek: league?.gameweek || 0, // Provide default value for gameweek
+          team_name: teamInfo?.teamName || `Team ${fplTeamId}`
+        }
+      };
+
+      const data = await initiatePaymentMutation.mutateAsync(paymentData);
       
       // Redirect to Paystack payment page
       window.location.href = data.authorization_url;
-      
     } catch (err: any) {
       console.error("Payment initiation error:", err);
       setError(err.message || "Failed to initiate payment. Please try again.");
-      toast.error("Payment initiation failed. Please try again.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (status === "loading" || loading) {
+
+
+  // Loading state
+  
+  // const initiatePayment = async () => {
+  //   try {
+  //     if (!leagueId) {
+  //       setError("League ID is missing. Please try again.");
+  //       return;
+  //     }
+
+  //     setSubmitting(true);
+  //     setError(null);
+
+  //     const paymentData = {
+  //       leagueId: leagueId,
+  //       fplTeamId,
+  //       amount: Math.round((league?.entryFee || 0) * 100), // Convert to kobo (smallest currency unit)
+  //       email: session?.user?.email,
+  //       name: session?.user?.name || 'FPL Player',
+  //       metadata: {
+  //         league_name: league?.name || 'Unknown League',
+  //         gameweek: league?.gameweek,
+  //         team_name: teamInfo?.teamName || `Team ${fplTeamId}`
+  //       }
+  //     };
+
+  //     const data = await initiatePaymentMutation.mutateAsync(paymentData);
+      
+  //     // Redirect to Paystack payment page
+  //     window.location.href = data.authorization_url;
+  //   } catch (err: any) {
+  //     console.error("Payment initiation error:", err);
+  //     setError(err.message || "Failed to initiate payment. Please try again.");
+  //   } finally {
+  //     setSubmitting(false);
+  //   }
+  // };
+  
+  const isLoading = isLoadingLeague || isLoadingProfile;
+  
+  if (status === "loading" || isLoading) {
     return (
       <div className="min-h-screen bg-gray-950 text-gray-100">
         <div className="container mx-auto py-12 px-4 max-w-md">
@@ -377,18 +333,19 @@ export default function JoinLeaguePage() {
     );
   }
 
+  // Rest of the component remains the same
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="container mx-auto py-12 px-4 max-w-md">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
           className="mb-8"
         >
           <Link href="/leagues/weekly">
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               className="group flex items-center space-x-1.5 pl-1 pr-3 text-gray-400 hover:text-indigo-400 hover:bg-gray-900/40 transition-all duration-200"
             >
               <motion.span
@@ -404,7 +361,7 @@ export default function JoinLeaguePage() {
           </Link>
         </motion.div>
 
-        <motion.h1 
+        <motion.h1
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.1 }}
@@ -420,7 +377,7 @@ export default function JoinLeaguePage() {
         >
           <Card className="bg-gray-900 border border-gray-800 overflow-hidden backdrop-blur-sm relative">
             <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/10 to-purple-900/10 rounded-xl pointer-events-none"></div>
-            
+
             <CardHeader className="relative z-10 border-b border-gray-800">
               <CardTitle className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
                 {league.name}
@@ -436,10 +393,10 @@ export default function JoinLeaguePage() {
                 </div>
               </CardDescription>
             </CardHeader>
-            
+
             <CardContent className="relative z-10 pt-6">
               {error && (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   className="mb-4 p-4 bg-red-900/30 border border-red-800/50 text-red-300 rounded-md flex items-start"
@@ -478,16 +435,16 @@ export default function JoinLeaguePage() {
                   </div>
 
                   {teamInfo && (
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ 
+                      transition={{
                         duration: 0.4,
                         ease: "easeOut"
                       }}
                       className="p-5 bg-gradient-to-br from-green-900/40 via-emerald-900/30 to-teal-900/20 border border-green-700/40 rounded-lg shadow-lg shadow-green-900/10 backdrop-blur-sm"
                     >
-                      <motion.div 
+                      <motion.div
                         initial={{ scale: 0.8, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
                         transition={{ delay: 0.1, duration: 0.3 }}
@@ -500,9 +457,9 @@ export default function JoinLeaguePage() {
                           Team Verified!
                         </h3>
                       </motion.div>
-                      
+
                       <div className="mt-3 space-y-3 pl-2">
-                        <motion.div 
+                        <motion.div
                           initial={{ x: -10, opacity: 0 }}
                           animate={{ x: 0, opacity: 1 }}
                           transition={{ delay: 0.2, duration: 0.3 }}
@@ -511,8 +468,8 @@ export default function JoinLeaguePage() {
                           <span className="text-gray-400 w-28 text-sm">Team Name:</span>
                           <span className="font-medium text-gray-100">{teamInfo.teamName}</span>
                         </motion.div>
-                        
-                        <motion.div 
+
+                        <motion.div
                           initial={{ x: -10, opacity: 0 }}
                           animate={{ x: 0, opacity: 1 }}
                           transition={{ delay: 0.3, duration: 0.3 }}
@@ -521,8 +478,8 @@ export default function JoinLeaguePage() {
                           <span className="text-gray-400 w-28 text-sm">Manager:</span>
                           <span className="font-medium text-gray-100">{teamInfo.managerName}</span>
                         </motion.div>
-                        
-                        <motion.div 
+
+                        <motion.div
                           initial={{ x: -10, opacity: 0 }}
                           animate={{ x: 0, opacity: 1 }}
                           transition={{ delay: 0.4, duration: 0.3 }}
@@ -532,16 +489,15 @@ export default function JoinLeaguePage() {
                           <span className="font-medium text-gray-100">
                             <span className="inline-flex items-center">
                               {teamInfo.overallRank.toLocaleString()}
-                              <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
-                                teamInfo.overallRank < 100000 
-                                  ? 'bg-green-900/50 text-green-300 border border-green-700/50' 
-                                  : teamInfo.overallRank < 500000 
+                              <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${teamInfo.overallRank < 100000
+                                  ? 'bg-green-900/50 text-green-300 border border-green-700/50'
+                                  : teamInfo.overallRank < 500000
                                     ? 'bg-blue-900/50 text-blue-300 border border-blue-700/50'
                                     : 'bg-gray-800/50 text-gray-300 border border-gray-700/50'
-                              }`}>
-                                {teamInfo.overallRank < 100000 
-                                  ? 'Elite' 
-                                  : teamInfo.overallRank < 500000 
+                                }`}>
+                                {teamInfo.overallRank < 100000
+                                  ? 'Elite'
+                                  : teamInfo.overallRank < 500000
                                     ? 'Skilled'
                                     : 'Active'}
                               </span>
@@ -552,7 +508,7 @@ export default function JoinLeaguePage() {
                     </motion.div>
                   )}
 
-                  {verifying && (
+                  {verifyTeam.isPending && (
                     <div className="mt-3 flex items-center text-indigo-400">
                       <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
                       Verifying team...
@@ -615,7 +571,7 @@ export default function JoinLeaguePage() {
                 </div>
               )}
             </CardContent>
-            
+
             <CardFooter className="flex justify-between pt-6 pb-6 relative z-10 border-t border-gray-800">
               {step === 1 ? (
                 <>
@@ -623,19 +579,19 @@ export default function JoinLeaguePage() {
                     <Button
                       variant="outline"
                       onClick={() => router.push("/leagues/weekly")}
-                      disabled={verifying}
+                      disabled={verifyTeam.isPending}
                       className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-indigo-400 bg-transparent"
                     >
                       Cancel
                     </Button>
                   </motion.div>
                   <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                    <Button 
-                      onClick={handleContinueToPayment} 
-                      disabled={verifying}
-                      className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 border-0"
+                    <Button
+                      onClick={handleContinueToPayment}
+                      disabled={verifyTeam.isPending}
+                      className="text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 border-0"
                     >
-                      {verifying ? (
+                      {verifyTeam.isPending ? (
                         <div className="flex items-center">
                           <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                           Verifying...
@@ -655,19 +611,19 @@ export default function JoinLeaguePage() {
                     <Button
                       variant="outline"
                       onClick={() => setStep(1)}
-                      disabled={submitting}
+                      disabled={submitting || initiatePaymentMutation.isPending}
                       className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-indigo-400 bg-transparent"
                     >
                       Back
                     </Button>
                   </motion.div>
                   <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                    <Button 
-                      onClick={initiatePayment} 
-                      disabled={submitting}
-                      className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 border-0"
+                    <Button
+                      onClick={initiatePayment}
+                      disabled={submitting || initiatePaymentMutation.isPending}
+                      className="text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 border-0"
                     >
-                      {submitting ? (
+                      {submitting || initiatePaymentMutation.isPending ? (
                         <div className="flex items-center">
                           <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                           Processing...

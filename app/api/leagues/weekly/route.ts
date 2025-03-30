@@ -67,3 +67,60 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export async function POST(request: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+    
+    // Check if the user is an admin using raw query
+    const adminCheck = await prisma.$queryRaw`
+      SELECT "isAdmin" FROM "User" WHERE id = ${session.user.id}
+    `;
+    
+    const isAdmin = (adminCheck as any[])[0]?.isAdmin === true;
+    
+    if (!isAdmin) {
+      return NextResponse.json(
+        { error: "Only administrators can create leagues" },
+        { status: 403 }
+      );
+    }
+    
+    const data = await request.json();
+    
+    // Create the league with all fields including description
+    const league = await prisma.weeklyLeague.create({
+      data: {
+        name: data.name,
+        description: data.description, // This should work after regenerating the client
+        gameweek: data.gameweek,
+        entryFee: data.entryFee,
+        maxParticipants: data.maxParticipants,
+        status: "upcoming",
+        startDate: new Date(), // Required field
+        endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Required field, set to 7 days from now
+        prizeDistribution: {
+          create: data.prizeDistribution.map((prize: any) => ({
+            position: prize.position,
+            percentageShare: prize.percentage
+          }))
+        }
+      } as any // Type assertion as a last resort if regenerating doesn't work
+    });
+    
+    return NextResponse.json(league);
+  } catch (error) {
+    console.error("Error creating league:", error);
+    return NextResponse.json(
+      { error: "Failed to create league" },
+      { status: 500 }
+    );
+  }
+}

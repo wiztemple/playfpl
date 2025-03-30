@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Wallet, Home, Trophy, HelpCircle, ChevronDown } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
+import { motion, AnimatePresence } from 'framer-motion';
 import UserNav from './UserNav';
 
 export default function MainNav() {
@@ -27,26 +28,35 @@ export default function MainNav() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [scrolled]);
 
+  // Close mobile menu when route changes
+  useEffect(() => {
+    setIsOpen(false);
+  }, [pathname]);
+
   const routes = [
     {
       href: '/',
       label: 'Home',
+      icon: <Home className="h-4 w-4 mr-1.5" />,
       active: pathname === '/',
     },
     {
       href: '/leagues/weekly',
       label: 'Weekly Leagues',
+      icon: <Trophy className="h-4 w-4 mr-1.5" />,
       active: pathname === '/leagues/weekly' || pathname.startsWith('/leagues/weekly/'),
     },
     {
       href: '/leagues/my-leagues',
       label: 'My Leagues',
+      icon: <Trophy className="h-4 w-4 mr-1.5" />,
       active: pathname === '/leagues/my-leagues',
       auth: true,
     },
     {
       href: '/how-it-works',
       label: 'How It Works',
+      icon: <HelpCircle className="h-4 w-4 mr-1.5" />,
       active: pathname === '/how-it-works',
     },
   ];
@@ -54,59 +64,89 @@ export default function MainNav() {
   return (
     <>
       <header 
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
           scrolled 
-            ? 'bg-gray-950/90 backdrop-blur-md border-b border-gray-800/80 shadow-lg' 
+            ? 'bg-gray-950/95 backdrop-blur-md border-b border-gray-800/80 shadow-lg shadow-black/20' 
             : 'bg-transparent backdrop-blur-sm'
         }`}
       >
         <div className="container mx-auto px-4">
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center">
-              <Link href="/" className="flex items-center group">
-                <span className="text-xl font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent group-hover:from-indigo-300 group-hover:via-purple-300 group-hover:to-pink-300 transition-all duration-300">
+              <Link href="/" className="flex items-center group relative">
+                <motion.span 
+                  className="text-xl font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent group-hover:from-indigo-300 group-hover:via-purple-300 group-hover:to-pink-300 transition-all duration-300"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5 }}
+                >
                   FPL Stakes
-                </span>
+                </motion.span>
+                <motion.div 
+                  className="absolute -bottom-1 left-0 h-0.5 bg-gradient-to-r from-indigo-500 to-purple-500 w-0 group-hover:w-full transition-all duration-300"
+                  initial={{ width: 0 }}
+                  animate={{ width: scrolled ? "100%" : 0 }}
+                  transition={{ duration: 0.3 }}
+                />
               </Link>
               <nav className="ml-10 hidden md:flex items-center space-x-6">
-                {routes.map((route) => {
+                {routes.map((route, index) => {
                   if (route.auth && !session) return null;
                   
                   return (
-                    <Link
+                    <motion.div
                       key={route.href}
-                      href={route.href}
-                      className={`text-sm font-medium transition-colors relative group ${
-                        route.active ? 'text-indigo-400' : 'text-gray-300'
-                      }`}
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: 0.1 * index }}
                     >
-                      {route.label}
-                      <span className={`absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-indigo-400 to-purple-400 transition-all duration-300 group-hover:w-full ${
-                        route.active ? 'w-full' : 'w-0'
-                      }`}></span>
-                    </Link>
+                      <Link
+                        href={route.href}
+                        className={`text-sm font-medium transition-colors relative group flex items-center ${
+                          route.active ? 'text-indigo-400' : 'text-gray-300'
+                        }`}
+                      >
+                        <span className="flex items-center">
+                          {route.icon}
+                          {route.label}
+                        </span>
+                        <span className={`absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-indigo-400 to-purple-400 transition-all duration-300 group-hover:w-full ${
+                          route.active ? 'w-full' : 'w-0'
+                        }`}></span>
+                      </Link>
+                    </motion.div>
                   );
                 })}
               </nav>
             </div>
-            
             <div className="hidden md:flex items-center space-x-4">
               {session ? (
-                <>
+                <motion.div 
+                  className="flex items-center space-x-4"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5 }}
+                >
                   <Link href="/wallet">
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="border-indigo-600/40 bg-indigo-950/30 text-indigo-300 hover:bg-indigo-900/40 hover:text-indigo-200 hover:border-indigo-500/60 transition-all duration-200 backdrop-blur-sm shadow-sm"
+                      className="border-indigo-600/40 bg-indigo-950/30 text-indigo-300 hover:bg-indigo-900/40 hover:text-indigo-200 hover:border-indigo-500/60 transition-all duration-200 backdrop-blur-sm shadow-sm flex items-center"
                     >
+                      <Wallet className="h-3.5 w-3.5 mr-1.5" />
                       Wallet
                     </Button>
                   </Link>
                   <UserNav />
-                </>
+                </motion.div>
               ) : (
-                <>
-                  <Link href="/api/auth/signin">
+                <motion.div 
+                  className="flex items-center space-x-4"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  <Link href="/auth/signin">
                     <Button 
                       variant="outline" 
                       size="sm" 
@@ -115,104 +155,156 @@ export default function MainNav() {
                       Sign In
                     </Button>
                   </Link>
-                  <Link href="/api/auth/signin">
+                  <Link href="/auth/signup">
                     <Button 
                       size="sm" 
-                      className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md hover:shadow-indigo-500/20 transition-all duration-200"
+                      className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md hover:shadow-indigo-500/20 transition-all duration-200 relative overflow-hidden group"
                     >
-                      Sign Up
+                      <span className="relative z-10">Sign Up</span>
+                      <span className="absolute inset-0 bg-gradient-to-r from-indigo-700 to-purple-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
                     </Button>
                   </Link>
-                </>
+                </motion.div>
               )}
             </div>
 
-            <button
+            <motion.button
               className="md:hidden text-gray-300 hover:text-indigo-400 transition-colors"
               onClick={() => setIsOpen(!isOpen)}
+              whileTap={{ scale: 0.95 }}
             >
               {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </button>
+            </motion.button>
           </div>
         </div>
         
-        {/* Mobile menu with improved glassmorphism */}
-        {isOpen && (
-          <div className="md:hidden border-t border-gray-800/50 py-4 bg-gray-900/90 backdrop-blur-xl shadow-lg">
-            <div className="container mx-auto px-4 space-y-3">
-              {routes.map((route) => {
-                if (route.auth && !session) return null;
+        {/* Mobile menu with improved glassmorphism and animations */}
+        <AnimatePresence>
+          {isOpen && (
+            <motion.div 
+              className="md:hidden border-t border-gray-800/50 py-4 bg-gray-900/95 backdrop-blur-xl shadow-lg"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="container mx-auto px-4 space-y-3">
+                {routes.map((route, index) => {
+                  if (route.auth && !session) return null;
+                  
+                  return (
+                    <motion.div
+                      key={route.href}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                    >
+                      <Link
+                        href={route.href}
+                        className={`block text-sm font-medium transition-colors hover:text-indigo-400 py-3 px-2 rounded-md ${
+                          route.active 
+                            ? 'text-indigo-400 bg-indigo-900/20 border-l-2 border-indigo-500 pl-3' 
+                            : 'text-gray-300'
+                        }`}
+                        onClick={() => setIsOpen(false)}
+                      >
+                        <div className="flex items-center">
+                          {route.icon}
+                          {route.label}
+                        </div>
+                      </Link>
+                    </motion.div>
+                  );
+                })}
                 
-                return (
-                  <Link
-                    key={route.href}
-                    href={route.href}
-                    className={`block text-sm font-medium transition-colors hover:text-indigo-400 py-2 ${
-                      route.active ? 'text-indigo-400' : 'text-gray-300'
-                    }`}
-                    onClick={() => setIsOpen(false)}
-                  >
-                    {route.label}
-                  </Link>
-                );
-              })}
-              
-              <div className="pt-4 border-t border-gray-800/50 mt-4 flex flex-col space-y-3">
-                {session ? (
-                  <>
-                    <Link href="/wallet" onClick={() => setIsOpen(false)}>
-                      <Button 
-                        variant="outline" 
-                        className="w-full border-indigo-600/40 bg-indigo-950/30 text-indigo-300 hover:bg-indigo-900/40 hover:text-indigo-200 hover:border-indigo-500/60 transition-all duration-200 backdrop-blur-sm" 
-                        size="sm"
+                <div className="pt-4 border-t border-gray-800/50 mt-4 flex flex-col space-y-3">
+                  {session ? (
+                    <>
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.2 }}
                       >
-                        Wallet
-                      </Button>
-                    </Link>
-                    <Link href="/profile" onClick={() => setIsOpen(false)}>
-                      <Button 
-                        variant="outline" 
-                        className="w-full border-gray-700/70 text-gray-300 hover:bg-gray-800/70 hover:text-indigo-400 transition-all duration-200" 
-                        size="sm"
+                        <Link href="/wallet" onClick={() => setIsOpen(false)}>
+                          <Button 
+                            variant="outline" 
+                            className="w-full border-indigo-600/40 bg-indigo-950/30 text-indigo-300 hover:bg-indigo-900/40 hover:text-indigo-200 hover:border-indigo-500/60 transition-all duration-200 backdrop-blur-sm flex items-center justify-center" 
+                            size="sm"
+                          >
+                            <Wallet className="h-4 w-4 mr-2" />
+                            Wallet
+                          </Button>
+                        </Link>
+                      </motion.div>
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
                       >
-                        Profile
-                      </Button>
-                    </Link>
-                    <Link href="/api/auth/signout" onClick={() => setIsOpen(false)}>
-                      <Button 
-                        variant="outline" 
-                        className="w-full border-gray-700/70 text-gray-300 hover:bg-gray-800/70 hover:text-indigo-400 transition-all duration-200" 
-                        size="sm"
+                        <Link href="/profile" onClick={() => setIsOpen(false)}>
+                          <Button 
+                            variant="outline" 
+                            className="w-full border-gray-700/70 text-gray-300 hover:bg-gray-800/70 hover:text-indigo-400 transition-all duration-200" 
+                            size="sm"
+                          >
+                            Profile
+                          </Button>
+                        </Link>
+                      </motion.div>
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
                       >
-                        Sign Out
-                      </Button>
-                    </Link>
-                  </>
-                ) : (
-                  <>
-                    <Link href="/api/auth/signin" onClick={() => setIsOpen(false)}>
-                      <Button 
-                        variant="outline" 
-                        className="w-full border-purple-600/40 bg-purple-950/30 text-purple-300 hover:bg-purple-900/40 hover:text-purple-200 hover:border-purple-500/60 transition-all duration-200 backdrop-blur-sm" 
-                        size="sm"
+                        <Link href="/api/auth/signout" onClick={() => setIsOpen(false)}>
+                          <Button 
+                            variant="outline" 
+                            className="w-full border-gray-700/70 text-gray-300 hover:bg-gray-800/70 hover:text-indigo-400 transition-all duration-200" 
+                            size="sm"
+                          >
+                            Sign Out
+                          </Button>
+                        </Link>
+                      </motion.div>
+                    </>
+                  ) : (
+                    <>
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.2 }}
                       >
-                        Sign In
-                      </Button>
-                    </Link>
-                    <Link href="/api/auth/signin" onClick={() => setIsOpen(false)}>
-                      <Button 
-                        className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md hover:shadow-indigo-500/20 transition-all duration-200" 
-                        size="sm"
+                        <Link href="/auth/signin" onClick={() => setIsOpen(false)}>
+                          <Button 
+                            variant="outline" 
+                            className="w-full border-purple-600/40 bg-purple-950/30 text-purple-300 hover:bg-purple-900/40 hover:text-purple-200 hover:border-purple-500/60 transition-all duration-200 backdrop-blur-sm" 
+                            size="sm"
+                          >
+                            Sign In
+                          </Button>
+                        </Link>
+                      </motion.div>
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
                       >
-                        Sign Up
-                      </Button>
-                    </Link>
-                  </>
-                )}
+                        <Link href="/auth/signup" onClick={() => setIsOpen(false)}>
+                          <Button 
+                            className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md hover:shadow-indigo-500/20 transition-all duration-200" 
+                            size="sm"
+                          >
+                            Sign Up
+                          </Button>
+                        </Link>
+                      </motion.div>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
       
       {/* This div creates space below the fixed header for all pages */}

@@ -1,15 +1,43 @@
 // /app/api/user/stats/route.ts
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/db";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { Session } from "next-auth";
+
+// Define a type for the session with user
+interface SessionWithUser extends Omit<Session, 'user'> {
+  user?: {
+    id?: string;
+    email?: string;
+    name?: string;
+    image?: string;
+  };
+}
 
 export async function GET() {
   try {
-    const session = await auth();
+    // Cast the session to our custom type
+    const session = await getServerSession(authOptions as any) as SessionWithUser;
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session || !session.user || !session.user.email) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
     }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: {
+        leagueEntries: {
+          select: {
+            rank: true,
+            winnings: true,
+          },
+        },
+      },
+    });
 
     // Fetch user's league entries
     const leagueEntries = await prisma.leagueEntry.findMany({
@@ -69,7 +97,7 @@ export async function GET() {
   } catch (error) {
     console.error("Error fetching user stats:", error);
     return NextResponse.json(
-      { error: "Failed to fetch user statistics" },
+      { error: "Failed to fetch user stats" },
       { status: 500 }
     );
   }
