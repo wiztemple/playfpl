@@ -7,7 +7,8 @@ export async function GET(
   context: { params: { id: string } }
 ) {
   try {
-    const { id } = context.params;
+    const params = await context.params;
+    const { id } = params;
 
     // Find the league by ID
     const league = await prisma.weeklyLeague.findUnique({

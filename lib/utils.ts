@@ -9,15 +9,28 @@ export function cn(...inputs: ClassValue[]) {
 /**
  * Formats a date string for display
  */
-export function formatDate(dateString: string | Date) {
+export function formatDate(dateString: string): string {
   const date = new Date(dateString);
-  return date.toLocaleDateString('en-GB', { 
-    weekday: 'short',
-    day: 'numeric', 
-    month: 'short', 
-    hour: '2-digit', 
-    minute: '2-digit' 
-  });
+
+  // Format: "Jan 1, 2023"
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  }).format(date);
+}
+
+export function formatCurrency(amount: number): string {
+  // Check if amount is a valid number
+  if (amount === undefined || amount === null || isNaN(amount)) {
+    amount = 0;
+  }
+
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'NGN',
+    minimumFractionDigits: 2
+  }).format(amount);
 }
 
 /**
@@ -27,12 +40,12 @@ export function calculateTimeRemaining(dateString: string | Date) {
   const targetDate = new Date(dateString);
   const now = new Date();
   const difference = targetDate.getTime() - now.getTime();
-  
+
   if (difference <= 0) return 'Started';
-  
+
   const days = Math.floor(difference / (1000 * 60 * 60 * 24));
   const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  
+
   if (days > 0) {
     return `${days}d ${hours}h`;
   } else {
@@ -42,28 +55,17 @@ export function calculateTimeRemaining(dateString: string | Date) {
 }
 
 /**
- * Formats currency values for display
- */
-export const formatCurrency = (amount: number, currency: string = "NGN") => {
-  return new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: currency,
-    minimumFractionDigits: 2,
-  }).format(amount);
-};
-
-/**
  * Creates a debounce function to limit API calls
  */
 export function debounce<T extends (...args: any[]) => any>(func: T, wait: number) {
   let timeout: NodeJS.Timeout;
-  
+
   return function executedFunction(...args: Parameters<T>) {
     const later = () => {
       clearTimeout(timeout);
       func(...args);
     };
-    
+
     clearTimeout(timeout);
     timeout = setTimeout(later, wait);
   };
@@ -90,11 +92,11 @@ export function isEmptyObject(obj: object) {
 export function generateRandomId(length = 8) {
   const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   let result = '';
-  
+
   for (let i = 0; i < length; i++) {
     result += characters.charAt(Math.floor(Math.random() * characters.length));
   }
-  
+
   return result;
 }
 

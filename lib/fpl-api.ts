@@ -20,6 +20,7 @@ export async function getBootstrapStatic() {
     }
 
     const data = await response.json();
+    console.log("FPL bootstrap data:", data); // Log the fetched data to the console
 
     // Cache the response
     bootstrapCache = data;
@@ -39,6 +40,7 @@ export async function getCurrentGameweek() {
 
     // Find the current gameweek
     const currentGameweek = data.events.find((gw: any) => gw.is_current);
+    console.log("Current gameweek:", currentGameweek); // Log the current gameweek to the console for diagnostic
 
     // If no current gameweek, find the next one
     if (!currentGameweek) {
@@ -69,7 +71,7 @@ async function getGameweekFixtures(gameweekId: number) {
   }
 }
 
-// Modify the existing getGameweekInfo function
+// Get details for a specific gameweek
 export async function getGameweekInfo(gameweekId: number) {
   try {
     const [bootstrapData, fixturesData] = await Promise.all([
@@ -83,15 +85,22 @@ export async function getGameweekInfo(gameweekId: number) {
       return null;
     }
 
-    // Find the last fixture of the gameweek
-    const sortedFixtures = fixturesData.sort((a: any, b: any) => 
-      new Date(b.kickoff_time).getTime() - new Date(a.kickoff_time).getTime()
+    // Find the first and last fixture of the gameweek
+    const sortedFixturesByTime = [...fixturesData].sort((a: any, b: any) => 
+      new Date(a.kickoff_time).getTime() - new Date(b.kickoff_time).getTime()
     );
+    
+    const firstFixture = sortedFixturesByTime[0];
+    const lastFixture = sortedFixturesByTime[sortedFixturesByTime.length - 1];
 
     return {
       ...gameweek,
       fixtures: fixturesData,
-      gameweek_end: sortedFixtures[0]?.kickoff_time // Last fixture's kickoff time
+      gameweek_start: firstFixture?.kickoff_time, // First fixture's kickoff time
+      gameweek_end: lastFixture?.kickoff_time, // Last fixture's kickoff time
+      fixture_count: fixturesData.length,
+      has_started: firstFixture ? new Date(firstFixture.kickoff_time) < new Date() : false,
+      has_finished: lastFixture ? new Date(lastFixture.kickoff_time) < new Date() : false
     };
   } catch (error) {
     console.error(`Error getting gameweek ${gameweekId} info:`, error);
@@ -99,22 +108,19 @@ export async function getGameweekInfo(gameweekId: number) {
   }
 }
 
-// Get a specific team's details
+// Get a specific team's details - simplified version without manual caching
 export async function getTeamInfo(teamId: number) {
   try {
     const response = await fetch(`${FPL_API_BASE}/entry/${teamId}/`);
-
+    
     if (!response.ok) {
-      if (response.status === 404) {
-        return null; // Team not found
-      }
-      throw new Error(`FPL API error: ${response.status}`);
+      throw new Error(`Failed to fetch team info: ${response.status}`);
     }
-
+    
     return await response.json();
   } catch (error) {
-    console.error(`Error getting team ${teamId} info:`, error);
-    throw error;
+    console.error(`Error fetching team info for ID ${teamId}:`, error);
+    return null;
   }
 }
 

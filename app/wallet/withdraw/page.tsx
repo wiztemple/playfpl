@@ -5,23 +5,35 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
-import { ChevronLeft, DollarSign, Banknote, ArrowUpRight, Wallet, AlertCircle } from 'lucide-react';
+import { ChevronLeft, AlertTriangle } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Label } from '@/app/components/ui/label';
 import { Input } from '@/app/components/ui/input';
-import Loading from '@/app/components/shared/Loading';
 import { formatCurrency } from '@/lib/utils';
 import { motion } from 'framer-motion';
+import Loading from '@/app/components/shared/Loading';
+import { useWalletData } from '@/app/hooks/user';
+import { useBanks, useVerifyAccount, useWithdraw } from '@/app/hooks/banks';
 
 export default function WithdrawPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [amount, setAmount] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [accountNumber, setAccountNumber] = useState('');
+  const [bankCode, setBankCode] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [accountName, setAccountName] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [walletBalance, setWalletBalance] = useState(0);
-  const [loading, setLoading] = useState(true);
+
+  // Use the wallet data hook
+  const { data: walletData, isLoading: walletLoading } = useWalletData();
+  const walletBalance = walletData?.balance || 0;
+
+  // Use our custom hooks
+  const { data: banks = [], isLoading: banksLoading } = useBanks();
+  const verifyAccountMutation = useVerifyAccount();
+  const withdrawMutation = useWithdraw();
 
   // Check if user is authenticated
   useEffect(() => {
@@ -30,43 +42,21 @@ export default function WithdrawPage() {
     }
   }, [status, router]);
 
-  // Fetch wallet balance
-  useEffect(() => {
-    const fetchWalletBalance = async () => {
-      try {
-        setLoading(true);
-        // In a real app, you would fetch this from the API
-        // For now, use mock data
-        await new Promise(resolve => setTimeout(resolve, 500));
-        setWalletBalance(125.75);
-      } catch (error) {
-        console.error('Error fetching wallet balance:', error);
-        setError('Failed to load wallet data. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (status === 'authenticated') {
-      fetchWalletBalance();
-    }
-  }, [status]);
-
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Remove non-numeric characters except decimal point
     const value = e.target.value.replace(/[^0-9.]/g, '');
-    
+
     // Ensure only one decimal point
     const parts = value.split('.');
     if (parts.length > 2) {
       return;
     }
-    
+
     // Limit to 2 decimal places
     if (parts.length === 2 && parts[1].length > 2) {
       return;
     }
-    
+
     setAmount(value);
     setError(null);
   };
@@ -76,44 +66,66 @@ export default function WithdrawPage() {
     setError(null);
   };
 
+  const verifyAccount = async () => {
+    if (!accountNumber || !bankCode) {
+      setError('Please enter account number and select a bank');
+      return;
+    }
+
+    try {
+      const data = await verifyAccountMutation.mutateAsync({
+        account_number: accountNumber,
+        bank_code: bankCode,
+      });
+      setAccountName(data.account_name);
+      setError(null);
+    } catch (error: any) {
+      setError(error.message || 'Failed to verify account. Please check your details.');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validate amount
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
       setError('Please enter a valid amount');
       return;
     }
-    
+
     if (numAmount < 5) {
       setError('Minimum withdrawal amount is ₦5');
       return;
     }
-    
+
     if (numAmount > walletBalance) {
       setError('Withdrawal amount exceeds your available balance');
       return;
     }
-    
+
+    if (!accountNumber || !bankCode || !accountName) {
+      setError('Please verify your bank account details');
+      return;
+    }
+
     try {
-      setIsProcessing(true);
-      
-      // This is a mock implementation
-      // In a real app, you would call your payment API
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
+      await withdrawMutation.mutateAsync({
+        amount: numAmount,
+        account_number: accountNumber,
+        bank_code: bankCode,
+        account_name: accountName,
+        bank_name: banks.find(bank => bank.code === bankCode)?.name || '',
+      });
+
       // Redirect to wallet with success message
       router.push('/wallet?success=withdraw');
-    } catch (error) {
-      console.error('Error processing withdrawal:', error);
-      setError('Failed to process your withdrawal. Please try again.');
-    } finally {
-      setIsProcessing(false);
+    } catch (error: any) {
+      setError(error.message || 'Failed to process your withdrawal. Please try again.');
     }
   };
 
-  if (status === 'loading' || loading) {
+  if (status === 'loading' || walletLoading || banksLoading) {
     return (
       <div className="min-h-screen bg-gray-950 text-gray-100">
         <div className="container mx-auto py-12 px-4 max-w-md">
@@ -126,7 +138,7 @@ export default function WithdrawPage() {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="container mx-auto py-12 px-4 max-w-md">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
@@ -139,121 +151,142 @@ export default function WithdrawPage() {
             </Button>
           </Link>
         </motion.div>
-        
-        <motion.h1 
+
+        <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-          className="text-3xl font-bold mb-8 bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent"
+          transition={{ duration: 0.3, delay: 0.1 }}
         >
-          Withdraw Funds
-        </motion.h1>
-        
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-        >
-          <Card className="bg-gray-900 border border-gray-800 overflow-hidden backdrop-blur-sm relative">
+          <Card className="backdrop-blur-md bg-gray-900/60 border border-gray-800 shadow-xl relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/10 to-purple-900/10 rounded-xl pointer-events-none"></div>
-            
-            <CardHeader className="relative z-10 border-b border-gray-800">
-              <CardTitle className="text-gray-100 flex items-center">
-                <ArrowUpRight className="h-5 w-5 mr-2 text-indigo-400" />
-                Withdraw from your wallet
+
+            <CardHeader className="relative z-10">
+              <CardTitle className="text-xl bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+                Withdraw Funds
               </CardTitle>
               <CardDescription className="text-gray-400">
-                Withdraw your winnings to your bank account
+                Withdraw funds from your wallet to your bank account
               </CardDescription>
             </CardHeader>
-            
-            <form onSubmit={handleSubmit}>
-              <CardContent className="space-y-6 pt-6 relative z-10">
-                <div className="bg-indigo-900/20 border border-indigo-800/30 p-4 rounded-md flex justify-between items-center backdrop-blur-sm">
-                  <span className="text-gray-300 flex items-center">
-                    <Wallet className="h-4 w-4 mr-2 text-indigo-400" />
-                    Available Balance
-                  </span>
-                  <span className="font-bold text-indigo-300">{formatCurrency(walletBalance)}</span>
+
+            <CardContent className="space-y-6 relative z-10">
+              {error && (
+                <div className="p-4 bg-red-900/30 border border-red-800/50 text-red-300 rounded-md text-sm flex items-start">
+                  <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5 text-red-400" />
+                  <p>{error}</p>
                 </div>
-                
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <Label htmlFor="amount" className="text-gray-300">Amount</Label>
-                    <button
-                      type="button"
-                      onClick={handleWithdrawMax}
-                      className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
-                    >
-                      Max
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-indigo-400" />
-                    <Input
-                      id="amount"
-                      type="text"
-                      placeholder="0.00"
-                      value={amount}
-                      onChange={handleAmountChange}
-                      className="pl-10 bg-gray-800/50 border-gray-700 text-gray-200 focus:border-indigo-600 focus:ring-indigo-600/20"
-                    />
-                  </div>
-                  {error && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: -5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex items-start mt-2 text-sm text-red-400"
-                    >
-                      <AlertCircle className="h-4 w-4 mr-1.5 mt-0.5 flex-shrink-0" />
-                      <span>{error}</span>
-                    </motion.div>
-                  )}
-                </div>
-                
-                <div className="space-y-2">
-                  <Label className="text-gray-300">Withdrawal Method</Label>
-                  <div className="border border-gray-700 rounded-md p-4 flex items-center justify-between bg-gray-800/50 backdrop-blur-sm">
-                    <div className="flex items-center">
-                      <Banknote className="h-4 w-4 mr-2 text-indigo-400" />
-                      <span className="text-gray-200">Demo Bank Account</span>
-                    </div>
-                    <span className="text-xs bg-indigo-900/50 text-indigo-300 px-2 py-0.5 rounded border border-indigo-700/50">
-                      Demo Mode
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    This is a demo app. No actual withdrawal will be processed.
+              )}
+
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <Label htmlFor="amount" className="text-gray-300">Amount</Label>
+                  <p className="text-sm text-gray-400">
+                    Available: <span className="text-indigo-400">{formatCurrency(walletBalance)}</span>
                   </p>
                 </div>
-              </CardContent>
-              
-              <CardFooter className="relative z-10 pt-2 pb-6 border-t border-gray-800">
-                <motion.div 
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="w-full"
-                >
-                  <Button 
-                    type="submit" 
-                    className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 border-0"
-                    disabled={isProcessing || !amount}
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <span className="text-gray-400">₦</span>
+                  </div>
+                  <Input
+                    id="amount"
+                    type="text"
+                    value={amount}
+                    onChange={handleAmountChange}
+                    className="pl-8 bg-gray-800/50 border-gray-700 text-gray-100 focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="0.00"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleWithdrawMax}
+                    className="absolute inset-y-0 right-0 px-3 text-xs text-indigo-400 hover:text-indigo-300"
                   >
-                    {isProcessing ? (
-                      <div className="flex items-center">
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                        Processing...
-                      </div>
-                    ) : (
-                      <div className="flex items-center">
-                        <ArrowUpRight className="h-4 w-4 mr-2" />
-                        Withdraw {amount ? formatCurrency(parseFloat(amount)) : '$0.00'}
-                      </div>
-                    )}
+                    MAX
                   </Button>
-                </motion.div>
-              </CardFooter>
-            </form>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="bank" className="text-gray-300 mb-2 block">Bank</Label>
+                <select
+                  id="bank"
+                  value={bankCode}
+                  onChange={(e) => {
+                    setBankCode(e.target.value);
+                    setBankName(banks.find(bank => bank.code === e.target.value)?.name || '');
+                    setAccountName(''); // Reset account name when bank changes
+                  }}
+                  className="w-full bg-gray-800/50 border border-gray-700 rounded-md py-2 px-3 text-gray-100 focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                  <option value="">Select a bank</option>
+                  {banks && banks.length > 0 ? (
+                    banks.map((bank, index) => (
+                      <option key={`${bank.code}-${index}`} value={bank.code}>
+                        {bank.name}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="" disabled>Loading banks...</option>
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <Label htmlFor="accountNumber" className="text-gray-300 mb-2 block">Account Number</Label>
+                <div className="flex space-x-2">
+                  <Input
+                    id="accountNumber"
+                    type="text"
+                    value={accountNumber}
+                    onChange={(e) => {
+                      setAccountNumber(e.target.value.replace(/\D/g, '').slice(0, 10));
+                      setAccountName('');
+                    }}
+                    className="bg-gray-800/50 border-gray-700 text-gray-100 focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="Enter 10-digit account number"
+                    maxLength={10}
+                  />
+                  <Button
+                    type="button"
+                    onClick={verifyAccount}
+                    disabled={verifyAccountMutation.isPending || !accountNumber || !bankCode}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                  >
+                    {verifyAccountMutation.isPending ? 'Verifying...' : 'Verify'}
+                  </Button>
+                </div>
+              </div>
+
+              {accountName && (
+                <div className="p-3 bg-green-900/30 border border-green-800/50 text-green-300 rounded-md">
+                  <p className="font-medium">Account Name: {accountName}</p>
+                </div>
+              )}
+
+              <Button
+                onClick={handleSubmit}
+                disabled={withdrawMutation.isPending || !amount || !accountName}
+                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white border-0 transition-all duration-200"
+              >
+                {withdrawMutation.isPending ? (
+                  <div className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Processing...
+                  </div>
+                ) : (
+                  'Withdraw Funds'
+                )}
+              </Button>
+            </CardContent>
+
+            <CardFooter className="relative z-10 text-xs text-gray-500 text-center">
+              <p>Withdrawals are typically processed within 24 hours. A small processing fee may apply.</p>
+            </CardFooter>
           </Card>
         </motion.div>
       </div>

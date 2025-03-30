@@ -13,12 +13,34 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/payment/failed?error=missing-params`);
     }
     
-    // Find the transaction
+    // Find the transaction in our database
     const transaction = await prisma.transaction.findFirst({
-      where: { externalReference: reference }
+      where: {
+        externalReference: reference
+      }
     });
     
     if (!transaction) {
+      console.error(`Transaction not found for reference: ${reference}`);
+      
+      // Try to find the league entry instead
+      const leagueEntry = await prisma.leagueEntry.findFirst({
+        where: {
+          paymentId: reference
+        }
+      });
+      
+      if (leagueEntry) {
+        // If we found the league entry but not the transaction, update the entry
+        await prisma.leagueEntry.update({
+          where: { id: leagueEntry.id },
+          data: { paid: true }
+        });
+        
+        // Redirect to my-leagues page with success parameter instead of non-existent success page
+        return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/leagues/my-leagues?success=true`);
+      }
+      
       return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/payment/failed?error=transaction-not-found`);
     }
     
@@ -63,15 +85,42 @@ export async function GET(request: Request) {
     });
 
     // Join the league
-    await prisma.leagueEntry.create({
-      data: {
-        userId: transaction.userId,
-        leagueId,
-        fplTeamId: parseInt(fplTeamId as string),
-        paid: true,
-        paymentId: transaction.id
+    try {
+      // Check if the user already has an entry in this league
+      const existingEntry = await prisma.leagueEntry.findUnique({
+        where: {
+          userId_leagueId: {
+            userId: transaction.userId,
+            leagueId: leagueId
+          }
+        }
+      });
+    
+      if (existingEntry) {
+        // Update the existing entry instead of creating a new one
+        await prisma.leagueEntry.update({
+          where: { id: existingEntry.id },
+          data: {
+            paid: true,
+            paymentId: transaction.id
+          }
+        });
+      } else {
+        // Create a new league entry
+        await prisma.leagueEntry.create({
+          data: {
+            userId: transaction.userId,
+            leagueId,
+            fplTeamId: parseInt(fplTeamId as string),
+            paid: true,
+            paymentId: transaction.id
+          }
+        });
       }
-    });
+    } catch (error) {
+      console.error("Error creating/updating league entry:", error);
+      // Continue with the payment flow even if league entry creation fails
+    }
     
     // Redirect to success page
     return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/leagues/my-leagues?success=true`);

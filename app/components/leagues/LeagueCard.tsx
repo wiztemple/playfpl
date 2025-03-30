@@ -5,14 +5,13 @@ import {
   Calendar,
   Users,
   ChevronRight,
+  CheckCircle
 } from "lucide-react";
 import { Button } from "../ui/button";
 import {
   Card
 } from "../ui/card";
 import {
-  formatDate,
-  calculateTimeRemaining,
   formatCurrency,
 } from "@/lib/utils";
 import { WeeklyLeague } from "@/app/types";
@@ -81,8 +80,6 @@ export default function LeagueCard({
     }
   };
 
-  { console.log("League start date:", league.startDate) }
-
   const [gameweekInfo, setGameweekInfo] = useState<any>(null);
 
   useEffect(() => {
@@ -110,18 +107,28 @@ export default function LeagueCard({
       transition={{ duration: 0.3 }}
       className="h-full"
     >
-      <Card className="backdrop-blur-md bg-gray-900/60 border border-gray-800 shadow-xl hover:shadow-indigo-500/10 hover:border-indigo-500/50 transition-all duration-300 relative overflow-hidden h-full">
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/10 to-purple-900/5 rounded-xl pointer-events-none"></div>
-        <div className="absolute -right-20 -top-20 w-40 h-40 bg-indigo-600/10 rounded-full blur-3xl"></div>
-
+      <Card className="backdrop-blur-md bg-gray-900/60 border border-gray-800 shadow-xl hover:shadow-indigo-500/20 hover:border-indigo-500/50 transition-all duration-300 relative overflow-hidden h-full">
+        {/* Enhanced background effects */}
+        <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/20 to-purple-900/10 rounded-xl pointer-events-none"></div>
+        <div className="absolute -right-20 -top-20 w-40 h-40 bg-indigo-600/20 rounded-full blur-3xl"></div>
+        <div className="absolute -left-20 -bottom-20 w-40 h-40 bg-purple-600/10 rounded-full blur-3xl"></div>
+        
+        {/* Card hologram effect */}
+        <div className="absolute top-5 right-5 w-8 h-8 rounded-full bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-500 opacity-70 blur-sm"></div>
+        <div className="absolute top-5 right-5 w-6 h-6 rounded-full bg-gradient-to-r from-indigo-300 to-purple-400 opacity-90"></div>
+        
         <div className="p-5">
-          {/* Card Header - Like a debit card chip */}
-          <div className="flex justify-between items-start mb-3">
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 h-6 w-10 rounded-md"></div>
-            <div className="text-xs font-medium px-2 py-1 rounded-full bg-gray-800/80 text-gray-300">
+          {/* Card Header - Enhanced chip design */}
+          <div className="flex justify-between items-start mb-4">
+            <div className="relative">
+              <div className="bg-gradient-to-r from-indigo-600 to-purple-600 h-7 w-12 rounded-md"></div>
+              <div className="absolute inset-0 bg-gradient-to-r from-indigo-400/30 to-purple-400/30 h-7 w-12 rounded-md blur-sm"></div>
+              <div className="absolute top-1 left-1 h-1 w-4 bg-white/30 rounded-sm"></div>
+            </div>
+            <div className="text-xs font-medium px-2 py-1 rounded-full bg-gray-800/80 text-gray-300 backdrop-blur-sm border border-gray-700/50">
               {league.status === "active" ? (
                 <span className="flex items-center text-green-400">
-                  <span className="w-2 h-2 bg-green-400 rounded-full mr-1.5"></span>
+                  <span className="w-2 h-2 bg-green-400 rounded-full mr-1.5 animate-pulse"></span>
                   Live
                 </span>
               ) : (
@@ -133,11 +140,11 @@ export default function LeagueCard({
             </div>
           </div>
 
-          {/* League Name */}
-          <h3 className="font-bold text-gray-100 text-lg mb-2 truncate">{league.name}</h3>
+          {/* League Name with subtle embossed effect */}
+          <h3 className="font-bold text-gray-100 text-lg mb-3 truncate drop-shadow-sm">{league.name}</h3>
 
-          {/* Prize & Entry */}
-          <div className="flex justify-between items-center mb-3">
+          {/* Prize & Entry - Credit card number style */}
+          <div className="flex justify-between items-center mb-4 bg-gradient-to-r from-gray-800/50 to-gray-800/30 p-2 rounded-md backdrop-blur-sm border border-gray-700/30">
             <div>
               <p className="text-xs text-gray-400">Prize Pool</p>
               <p className="text-md font-semibold text-gray-200">{formatCurrency(prizePool)}</p>
@@ -162,50 +169,46 @@ export default function LeagueCard({
             </div>
           </div>
 
-          {/* Progress Bar */}
-          <div className="w-full bg-gray-800 rounded-full h-1.5 mb-4">
+          {/* Progress Bar - Enhanced with gradient and glow */}
+          <div className="w-full bg-gray-800/80 rounded-full h-1.5 mb-4 overflow-hidden backdrop-blur-sm">
             <div
-              className={`bg-gradient-to-r ${getStatusColors()} h-1.5 rounded-full`}
+              className={`bg-gradient-to-r ${getStatusColors()} h-1.5 rounded-full relative`}
               style={{ width: `${(league.currentParticipants / league.maxParticipants) * 100}%` }}
-            ></div>
-          </div>
-          {league.status === "upcoming" && gameweekInfo && gameweekInfo.deadline_time && (
-            <div className="mb-4">
-              <Countdown
-                targetDate={gameweekInfo.deadline_time}
-                label="Deadline"
-                variant="card"
-              />
+            >
+              <div className="absolute inset-0 bg-white/20 h-0.5"></div>
             </div>
-          )}
+          </div>
+          
+          {/* Countdown and Joined Status */}
+          <div className="mb-4 flex justify-between items-center">
+            {league.status === "upcoming" && gameweekInfo && gameweekInfo.deadline_time ? (
+              <div className="flex-grow">
+                <Countdown
+                  targetDate={gameweekInfo.deadline_time}
+                  label="Deadline"
+                  variant="card"
+                />
+              </div>
+            ) : (
+              <div></div>
+            )}
+            
+            {league.hasJoined && (
+              <div className="flex items-center bg-gradient-to-r from-green-500 to-emerald-600 text-white text-xs font-medium px-2 py-1 rounded-full ml-2 shadow-sm">
+                <CheckCircle className="w-3 h-3 mr-1" />
+                Joined
+              </div>
+            )}
+          </div>
 
-          {/* Action Button */}
-          {league.hasJoined ? (
-            <Button
-              onClick={onView}
-              className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white border-0 flex items-center justify-center py-1.5 h-auto"
-            >
-              View League
-              <ChevronRight className="ml-1.5 h-3.5 w-3.5" />
-            </Button>
-          ) : isJoinable ? (
-            <Button
-              onClick={onJoin}
-              className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white border-0 flex items-center justify-center py-1.5 h-auto"
-            >
-              Join League
-              <ChevronRight className="ml-1.5 h-3.5 w-3.5" />
-            </Button>
-          ) : (
-            <Button
-              onClick={onView}
-              variant="outline"
-              className="w-full border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-indigo-400 flex items-center justify-center py-1.5 h-auto"
-            >
-              View Details
-              <ChevronRight className="ml-1.5 h-3.5 w-3.5" />
-            </Button>
-          )}
+          {/* Action Button - Enhanced with gradient and glow */}
+          <Button
+            onClick={onView}
+            className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white border-0 flex items-center justify-center py-2 h-auto rounded-md shadow-md hover:shadow-indigo-500/50 transition-all duration-300"
+          >
+            View League
+            <ChevronRight className="ml-1.5 h-3.5 w-3.5" />
+          </Button>
         </div>
       </Card>
     </motion.div>

@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Info, AlertTriangle, Sparkles, Trophy, DollarSign, Users, Calendar } from "lucide-react";
+import { ChevronLeft, Info, AlertTriangle, Sparkles, Trophy, DollarSign, Users, Calendar, ShieldAlert } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import {
   Card,
@@ -25,6 +25,8 @@ export default function CreateLeaguePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validation, setValidation] = useState<Record<string, string>>({});
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [adminChecking, setAdminChecking] = useState(true);
 
   // Update form state
   const [formData, setFormData] = useState({
@@ -79,6 +81,28 @@ export default function CreateLeaguePage() {
       startDate: now.toISOString().slice(0, 16), // Format: YYYY-MM-DDTHH:MM
     }));
   }, []);
+
+  useEffect(() => {
+    async function checkAdminStatus() {
+      try {
+        const response = await fetch("/api/user/admin-status");
+        const data = await response.json();
+
+        setIsAdmin(data.isAdmin);
+
+        if (!data.isAdmin) {
+          router.push("/leagues/weekly");
+        }
+      } catch (error) {
+        console.error("Error checking admin status:", error);
+        router.push("/leagues/weekly");
+      } finally {
+        setAdminChecking(false);
+      }
+    }
+
+    checkAdminStatus();
+  }, [router]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type } = e.target;
@@ -244,12 +268,12 @@ export default function CreateLeaguePage() {
 
         if (errorData?.details) {
           const validationErrors: Record<string, string> = {};
-          
+
           // Handle top-level errors
           if (errorData.details._errors?.length > 0) {
             validationErrors.form = errorData.details._errors[0];
           }
-          
+
           // Handle field-specific errors
           Object.entries(errorData.details).forEach(([key, value]) => {
             if (key === "_errors") return;
@@ -260,7 +284,7 @@ export default function CreateLeaguePage() {
               }
             }
           });
-          
+
           setValidation(validationErrors);
           throw new Error(validationErrors.form || "Please fix the form errors and try again");
         } else {
@@ -284,10 +308,47 @@ export default function CreateLeaguePage() {
     .reduce((sum, prize) => sum + prize.percentageShare, 0)
     .toFixed(1);
 
+  if (adminChecking) {
+    return (
+      <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-xl">Checking authorization...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isAdmin === false) {
+    return (
+      <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-gray-900 border border-gray-800">
+          <CardHeader>
+            <div className="flex items-center text-red-400 mb-2">
+              <ShieldAlert className="h-6 w-6 mr-2" />
+              <CardTitle>Unauthorized Access</CardTitle>
+            </div>
+            <CardDescription className="text-gray-400">
+              You don't have permission to create leagues.
+            </CardDescription>
+          </CardHeader>
+          <CardFooter>
+            <Button
+              onClick={() => router.push("/leagues/weekly")}
+              className="w-full bg-indigo-600 hover:bg-indigo-700"
+            >
+              Return to Leagues
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="container mx-auto py-12 px-4 max-w-3xl">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
@@ -301,7 +362,7 @@ export default function CreateLeaguePage() {
           </Link>
         </motion.div>
 
-        <motion.h1 
+        <motion.h1
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.1 }}
@@ -310,7 +371,7 @@ export default function CreateLeaguePage() {
           Create Weekly League
         </motion.h1>
 
-        <motion.form 
+        <motion.form
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
@@ -318,7 +379,7 @@ export default function CreateLeaguePage() {
         >
           <Card className="bg-gray-900 border border-gray-800 overflow-hidden backdrop-blur-sm relative">
             <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/10 to-purple-900/10 rounded-xl pointer-events-none"></div>
-            
+
             <CardHeader className="relative z-10 border-b border-gray-800">
               <CardTitle className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
                 League Details
@@ -327,10 +388,10 @@ export default function CreateLeaguePage() {
                 Set up your weekly cash league contest
               </CardDescription>
             </CardHeader>
-            
+
             <CardContent className="space-y-6 relative z-10 pt-6">
               {error && (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   className="bg-red-900/30 border border-red-800/50 text-red-300 p-4 rounded-lg flex items-start"
@@ -391,7 +452,7 @@ export default function CreateLeaguePage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <motion.div 
+                <motion.div
                   className="space-y-6"
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -438,7 +499,7 @@ export default function CreateLeaguePage() {
                   </div>
                 </motion.div>
 
-                <motion.div 
+                <motion.div
                   className="space-y-6"
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -486,7 +547,7 @@ export default function CreateLeaguePage() {
                 </motion.div>
               </div>
 
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.4 }}
@@ -521,11 +582,10 @@ export default function CreateLeaguePage() {
                       className="flex items-center space-x-3 p-3 rounded-lg bg-gradient-to-r from-gray-800/50 to-gray-900/50 border border-gray-800"
                     >
                       <div className="w-20 flex items-center">
-                        <Trophy className={`h-4 w-4 mr-2 ${
-                          prize.position === 1 ? "text-yellow-500" :
+                        <Trophy className={`h-4 w-4 mr-2 ${prize.position === 1 ? "text-yellow-500" :
                           prize.position === 2 ? "text-gray-400" :
-                          prize.position === 3 ? "text-amber-700" : "text-gray-500"
-                        }`} />
+                            prize.position === 3 ? "text-amber-700" : "text-gray-500"
+                          }`} />
                         <div className="text-sm font-medium text-gray-300">
                           {formData.leagueType === 'jackpot'
                             ? 'Winner'
@@ -548,7 +608,7 @@ export default function CreateLeaguePage() {
                 </div>
               </motion.div>
             </CardContent>
-            
+
             <CardFooter className="flex justify-between pt-6 pb-6 relative z-10 border-t border-gray-800">
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Button
@@ -561,8 +621,8 @@ export default function CreateLeaguePage() {
                 </Button>
               </motion.div>
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   disabled={loading}
                   className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 border-0"
                 >
