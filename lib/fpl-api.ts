@@ -80,16 +80,16 @@ export async function getGameweekInfo(gameweekId: number) {
     ]);
 
     const gameweek = bootstrapData.events.find((gw: any) => gw.id === gameweekId);
-    
+
     if (!gameweek) {
       return null;
     }
 
     // Find the first and last fixture of the gameweek
-    const sortedFixturesByTime = [...fixturesData].sort((a: any, b: any) => 
+    const sortedFixturesByTime = [...fixturesData].sort((a: any, b: any) =>
       new Date(a.kickoff_time).getTime() - new Date(b.kickoff_time).getTime()
     );
-    
+
     const firstFixture = sortedFixturesByTime[0];
     const lastFixture = sortedFixturesByTime[sortedFixturesByTime.length - 1];
 
@@ -112,11 +112,11 @@ export async function getGameweekInfo(gameweekId: number) {
 export async function getTeamInfo(teamId: number) {
   try {
     const response = await fetch(`${FPL_API_BASE}/entry/${teamId}/`);
-    
+
     if (!response.ok) {
       throw new Error(`Failed to fetch team info: ${response.status}`);
     }
-    
+
     return await response.json();
   } catch (error) {
     console.error(`Error fetching team info for ID ${teamId}:`, error);

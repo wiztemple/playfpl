@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/app/components/ui/button";
-import { Input } from "@/app/components/ui/input";
 import {
   Card,
   CardContent,
@@ -14,19 +13,19 @@ import {
   CardTitle,
 } from "@/app/components/ui/card";
 import { AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 export default function VerifyEmailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const userId = searchParams.get("userId");
   const email = searchParams.get("email");
   
-  const [verificationCode, setVerificationCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
-  const [resendDisabled, setResendDisabled] = useState(true);
+  const [resendDisabled, setResendDisabled] = useState(false);
+  const isMagicLink = searchParams.get("magic") === "true";
 
   useEffect(() => {
     if (resendDisabled) {
@@ -41,67 +40,138 @@ export default function VerifyEmailPage() {
     }
   }, [timeLeft, resendDisabled]);
 
-  const handleVerify = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch("/api/auth/verify-code", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userId,
-          code: verificationCode,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to verify email");
-      }
-
-      setSuccess(true);
+  // Check for verification token in URL (Supabase redirects here with token)
+  useEffect(() => {
+    const handleTokenVerification = async () => {
+      // Get the hash fragment from the URL
+      const hash = window.location.hash;
       
-      // Redirect to sign in page after 2 seconds
-      setTimeout(() => {
-        router.push("/auth/signin?success=email-verified");
-      }, 2000);
-    } catch (error: any) {
-      setError(error.message || "Verification failed. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      // Check for error in the URL hash
+      if (hash && hash.includes('error=')) {
+        const hashParams = new URLSearchParams(hash.substring(1));
+        const errorCode = hashParams.get('error_code');
+        const errorDescription = hashParams.get('error_description');
+        
+        if (errorCode === 'otp_expired') {
+          setError('Your verification link has expired. Please request a new one.');
+        } else {
+          setError(errorDescription || 'Verification failed. Please try again.');
+        }
+        return;
+      }
+      
+      // Check for successful verification (either with type=signup or access_token)
+      if (hash && (hash.includes('type=signup') || hash.includes('access_token='))) {
+        setIsLoading(true);
+        setError(null);
+        
+        try {
+          // Extract the access_token and refresh_token from the URL
+          const hashParams = new URLSearchParams(hash.substring(1));
+          const accessToken = hashParams.get('access_token');
+          const refreshToken = hashParams.get('refresh_token');
+          
+          if (!accessToken) {
+            throw new Error('No access token found');
+          }
+          
+          console.log('Found access token, setting session');
+          
+          // Set the session with the tokens
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken || '',
+          });
+          
+          if (error) {
+            console.error('Session error:', error);
+            throw error;
+          }
+          
+          // Get the user to confirm verification worked
+          const { data: { user }, error: userError } = await supabase.auth.getUser();
+          
+          if (userError || !user) {
+            console.error('User fetch error:', userError);
+            throw userError || new Error('Failed to get user data');
+          }
+          
+          console.log('User verified:', user.email);
+          
+          // Update the email_verified status in the profiles table
+          try {
+            const response = await fetch('/api/auth/update-verification-status', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ 
+                userId: user.id, 
+                email: user.email 
+              }),
+            });
+            
+            if (!response.ok) {
+              console.warn('Failed to update email verification status, but continuing with verification flow');
+            } else {
+              console.log('Email verification status updated successfully');
+            }
+          } catch (updateError) {
+            console.warn('Error updating verification status:', updateError);
+            // Continue with verification flow even if update fails
+          }
+          
+          setSuccess(true);
+          
+          // Redirect to sign in page after 2 seconds
+          setTimeout(() => {
+            router.push("/auth/signin?success=email-verified");
+          }, 2000);
+        } catch (error: any) {
+          console.error('Verification error:', error);
+          setError(error.message || "Verification failed. Please try again.");
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+    
+    handleTokenVerification();
+  }, [router]);
 
-  const handleResendCode = async () => {
+  const handleResendVerification = async () => {
+    if (!email) {
+      setError("Email address is missing");
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await fetch("/api/auth/resend-code", {
-        method: "POST",
+      // Use the magic link API for more reliable delivery
+      const response = await fetch('/api/auth/send-magic-link', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          userId,
+        body: JSON.stringify({ 
+          email,
+          redirectTo: `${window.location.origin}/auth/callback`
         }),
       });
-
+      
       const data = await response.json();
-
+      
       if (!response.ok) {
-        throw new Error(data.error || "Failed to resend verification code");
+        throw new Error(data.error || 'Failed to send verification email');
       }
-
+      
       setTimeLeft(60); // 60 seconds cooldown
       setResendDisabled(true);
     } catch (error: any) {
-      setError(error.message || "Failed to resend code. Please try again.");
+      console.error('Resend error:', error);
+      setError(error.message || "Failed to resend verification email. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -129,7 +199,7 @@ export default function VerifyEmailPage() {
               Verify Your Email
             </CardTitle>
             <CardDescription className="text-center text-gray-400">
-              Enter the verification code sent to {email || "your email"}
+              {success ? "Email verified successfully!" : `We've sent a verification link to ${email || "your email"}`}
             </CardDescription>
           </CardHeader>
           
@@ -150,50 +220,50 @@ export default function VerifyEmailPage() {
                 </p>
               </div>
             ) : (
-              <form onSubmit={handleVerify} className="space-y-6">
-                <div className="space-y-2">
-                  <div className="flex justify-center">
-                    <Input
-                      value={verificationCode}
-                      onChange={(e) => setVerificationCode(e.target.value)}
-                      className="text-center text-2xl tracking-widest bg-gray-800/50 border-gray-700 text-gray-100 py-6 max-w-[200px]"
-                      maxLength={6}
-                      placeholder="000000"
-                      required
-                    />
-                  </div>
-                  <p className="text-xs text-gray-400 text-center mt-2">
-                    Enter the 6-digit code sent to your email
-                  </p>
+              <div className="space-y-6">
+                <div className="bg-gray-800/50 border border-gray-700 rounded-md p-4">
+                  <h3 className="text-gray-300 font-medium mb-2">Instructions:</h3>
+                  <ol className="text-gray-400 text-sm space-y-2 list-decimal list-inside">
+                    <li>Check your email inbox for a message from FPL Stakes</li>
+                    <li>{isMagicLink ? "Click the magic link in the email" : "Click the verification link in the email"}</li>
+                    <li>You'll be redirected back to complete the {isMagicLink ? "signup" : "verification"}</li>
+                  </ol>
                 </div>
-                
-                <Button 
-                  type="submit" 
-                  className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white transition-all duration-200"
-                  disabled={isLoading || verificationCode.length !== 6}
-                >
-                  {isLoading ? (
-                    <div className="flex items-center">
-                      <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" />
-                      Verifying...
-                    </div>
-                  ) : (
-                    "Verify Email"
-                  )}
-                </Button>
                 
                 <div className="text-center">
+                  <p className="text-gray-400 text-sm mb-4">
+                    Didn't receive an email? Check your spam folder or try again.
+                  </p>
+                  
                   <Button
                     type="button"
-                    variant="link"
-                    className="text-indigo-400 hover:text-indigo-300"
-                    onClick={handleResendCode}
+                    variant="outline"
+                    className="border-indigo-600/50 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-950/30"
+                    onClick={handleResendVerification}
                     disabled={resendDisabled || isLoading}
                   >
-                    {resendDisabled ? `Resend code (${timeLeft}s)` : "Resend code"}
+                    {isLoading ? (
+                      <div className="flex items-center">
+                        <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4" />
+                        Sending...
+                      </div>
+                    ) : resendDisabled ? (
+                      `Resend email (${timeLeft}s)`
+                    ) : (
+                      `Resend ${isMagicLink ? "magic link" : "verification email"}`
+                    )}
                   </Button>
+                  
+                  {/* Add debug info for troubleshooting */}
+                  {process.env.NODE_ENV === 'development' && (
+                    <div className="mt-6 text-xs text-gray-500">
+                      <p>Email: {email || "Not provided"}</p>
+                      <p>Mode: {isMagicLink ? "Magic Link" : "Verification Email"}</p>
+                      <p>Redirect URL: {`${window.location.origin}/auth/callback`}</p>
+                    </div>
+                  )}
                 </div>
-              </form>
+              </div>
             )}
           </CardContent>
           

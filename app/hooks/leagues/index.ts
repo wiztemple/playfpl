@@ -1,6 +1,7 @@
 import { LeaderboardEntry, WeeklyLeague } from "@/app/types";
 import { useQuery } from "@tanstack/react-query";
-import { useSession } from "next-auth/react";
+import { useState, useEffect } from "react";
+import { useSupabaseSession } from "@/app/components/providers/SessionProvider";
 
 export function useAvailableLeagues(gameweek?: number) {
     return useQuery({
@@ -14,6 +15,12 @@ export function useAvailableLeagues(gameweek?: number) {
 
             console.log("Fetching leagues from:", url);
             const response = await fetch(url);
+
+            // Handle 401 errors gracefully
+            if (response.status === 401) {
+                console.log("Session expired, continuing as guest");
+                return { leagues: [], pagination: { total: 0, page: 1, limit: 10, totalPages: 0 } };
+            }
 
             if (!response.ok) {
                 console.error(
@@ -36,24 +43,43 @@ export function useMyLeagues() {
         queryKey: ['leagues', 'my-leagues'],
         queryFn: async () => {
             const response = await fetch('/api/leagues/weekly?filter=my-leagues');
+            
+            // Handle 401 errors gracefully
+            if (response.status === 401) {
+                console.log("Session expired, returning empty leagues list");
+                return { leagues: [], pagination: { total: 0, page: 1, limit: 10, totalPages: 0 } };
+            }
+            
             if (!response.ok) {
                 throw new Error('Failed to fetch my leagues');
             }
-            return response.json() as Promise<WeeklyLeague[]>;
+            return response.json();
         },
     });
 }
 
 export function useLeague(leagueId: string) {
-    const { data: session } = useSession();
+    // Use the Supabase session provider
+    const { user } = useSupabaseSession();
 
     return useQuery({
-        queryKey: ['league', leagueId, session?.user?.id],
+        queryKey: ['league', leagueId, user?.id],
         queryFn: async () => {
             if (!leagueId) throw new Error('League ID is missing');
 
             const timestamp = new Date().getTime();
             const response = await fetch(`/api/leagues/weekly/${leagueId}?_=${timestamp}`);
+
+            if (response.status === 401) {
+                console.log("Session expired, continuing as guest");
+                // Return basic league data without user-specific info
+                const leagueData = await response.json() as WeeklyLeague;
+                return {
+                    ...leagueData,
+                    hasJoined: false,
+                    hasPaid: false
+                };
+            }
 
             if (!response.ok) {
                 throw new Error('Failed to fetch league details');
@@ -62,13 +88,19 @@ export function useLeague(leagueId: string) {
             const leagueData = await response.json() as WeeklyLeague;
 
             // Check if the current user has joined this league
-            if (session?.user?.id) {
-                const userEntryResponse = await fetch(`/api/leagues/entry?userId=${session.user.id}&leagueId=${leagueId}`);
-                if (userEntryResponse.ok) {
-                    const userEntryData = await userEntryResponse.json();
-                    leagueData.hasJoined = !!userEntryData.entry;
-                    leagueData.hasPaid = userEntryData.entry?.paid || false;
-                } else {
+            if (user?.id) {
+                try {
+                    const userEntryResponse = await fetch(`/api/leagues/entry?userId=${user.id}&leagueId=${leagueId}`);
+                    if (userEntryResponse.ok) {
+                        const userEntryData = await userEntryResponse.json();
+                        leagueData.hasJoined = !!userEntryData.entry;
+                        leagueData.hasPaid = userEntryData.entry?.paid || false;
+                    } else {
+                        leagueData.hasJoined = false;
+                        leagueData.hasPaid = false;
+                    }
+                } catch (error) {
+                    console.error("Error checking user entry:", error);
                     leagueData.hasJoined = false;
                     leagueData.hasPaid = false;
                 }

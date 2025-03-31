@@ -1,60 +1,70 @@
 import { NextResponse } from "next/server";
+import { supabase } from "@/lib/supabase";
 import { getServerSession } from "next-auth/next";
-import { prisma } from "@/lib/db";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { Session } from "next-auth";
 
-// Define a proper type for the session
-interface CustomSession extends Omit<Session, 'user'> {
-  user?: {
-    id?: string;
-    email?: string;
-    name?: string;
-    image?: string;
-    fplTeamId?: number;
-    fplTeamName?: string;
-    username?: string;
-  };
-}
-
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    // Use the custom session type
-    const session = await getServerSession(authOptions as any) as CustomSession;
-
-    if (!session?.user?.email) {
+    // Get the user session
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
       );
     }
+    
+    // Get user profile
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .single();
+    
+    if (error) {
+      throw error;
+    }
+    
+    return NextResponse.json(profile);
+  } catch (error) {
+    console.error("Error fetching profile:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch profile" },
+      { status: 500 }
+    );
+  }
+}
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        image: true,
-        username: true,
-        fplTeamId: true,
-        fplTeamName: true,
-        createdAt: true,
-      },
-    });
-
-    if (!user) {
+export async function PUT(request: Request) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
       return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
+        { error: "Unauthorized" },
+        { status: 401 }
       );
     }
-
-    return NextResponse.json(user);
+    
+    const profileData = await request.json();
+    
+    // Update user profile
+    const { data, error } = await supabase
+      .from('profiles')
+      .update(profileData)
+      .eq('user_id', session.user.id)
+      .select()
+      .single();
+    
+    if (error) {
+      throw error;
+    }
+    
+    return NextResponse.json(data);
   } catch (error) {
-    console.error("Error fetching user profile:", error);
+    console.error("Error updating profile:", error);
     return NextResponse.json(
-      { error: "Failed to fetch user profile" },
+      { error: "Failed to update profile" },
       { status: 500 }
     );
   }

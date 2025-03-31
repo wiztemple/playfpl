@@ -1,75 +1,81 @@
 'use client';
 
-import React from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { useSession, signOut } from 'next-auth/react';
+import { User } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/app/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/app/components/ui/avatar';
-import { User, Settings, LogOut, Wallet } from 'lucide-react';
+import { Button } from '@/app/components/ui/button';
+import { CreditCard, LogOut, Settings, User as UserIcon } from 'lucide-react';
 
-export default function UserNav() {
-  const { data: session } = useSession();
+interface UserNavProps {
+  user: User;
+}
+
+export default function UserNav({ user }: UserNavProps) {
+  const [isOpen, setIsOpen] = useState(false);
   
-  if (!session) return null;
-  
-  const userInitials = session.user.name
-    ? session.user.name
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .toUpperCase()
-    : session.user.email?.charAt(0).toUpperCase() || 'U';
-    
+  // Get user initials for avatar fallback
+  const getInitials = () => {
+    if (!user?.email) return '?';
+    return user.email.substring(0, 2).toUpperCase();
+  };
+
   return (
-    <DropdownMenu>
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center gap-2 rounded-full border border-gray-700 p-1 hover:border-indigo-500 transition-colors duration-200 focus:outline-none">
-          <Avatar className="h-8 w-8 bg-gray-800">
-            <AvatarImage src={session.user.image || undefined} alt={session.user.name || 'User'} />
-            <AvatarFallback className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white">{userInitials}</AvatarFallback>
+        <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+          <Avatar className="h-8 w-8 border border-indigo-500/30 bg-gray-900">
+            <AvatarImage src={user?.user_metadata?.avatar_url} alt={user?.email || ''} />
+            <AvatarFallback className="bg-indigo-950 text-indigo-200 text-xs">
+              {getInitials()}
+            </AvatarFallback>
           </Avatar>
-        </button>
+        </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56 bg-gray-900 border border-gray-800 text-gray-300" align="end">
-        <DropdownMenuLabel>
+      <DropdownMenuContent className="w-56 mt-1 bg-gray-900 border border-gray-800" align="end" forceMount>
+        <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium text-gray-200">{session.user.name}</p>
-            <p className="text-xs text-gray-400 truncate">{session.user.email}</p>
+            <p className="text-sm font-medium leading-none text-gray-200">
+              {user?.user_metadata?.name || user?.email}
+            </p>
+            <p className="text-xs leading-none text-gray-400">{user?.email}</p>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator className="bg-gray-800" />
-        <DropdownMenuGroup>
-          <DropdownMenuItem asChild className="focus:bg-gray-800 focus:text-indigo-400">
-            <Link href="/profile" className="flex cursor-pointer items-center">
-              <User className="mr-2 h-4 w-4 text-indigo-400" />
-              <span>Profile</span>
-            </Link>
+        <Link href="/profile" onClick={() => setIsOpen(false)}>
+          <DropdownMenuItem className="cursor-pointer text-gray-300 focus:bg-gray-800 focus:text-indigo-300">
+            <UserIcon className="mr-2 h-4 w-4" />
+            <span>Profile</span>
           </DropdownMenuItem>
-          <DropdownMenuItem asChild className="focus:bg-gray-800 focus:text-indigo-400">
-            <Link href="/wallet" className="flex cursor-pointer items-center">
-              <Wallet className="mr-2 h-4 w-4 text-purple-400" />
-              <span>Wallet</span>
-            </Link>
+        </Link>
+        <Link href="/wallet" onClick={() => setIsOpen(false)}>
+          <DropdownMenuItem className="cursor-pointer text-gray-300 focus:bg-gray-800 focus:text-indigo-300">
+            <CreditCard className="mr-2 h-4 w-4" />
+            <span>Wallet</span>
           </DropdownMenuItem>
-          <DropdownMenuItem asChild className="focus:bg-gray-800 focus:text-indigo-400">
-            <Link href="/profile/settings" className="flex cursor-pointer items-center">
-              <Settings className="mr-2 h-4 w-4 text-pink-400" />
-              <span>Settings</span>
-            </Link>
+        </Link>
+        <Link href="/settings" onClick={() => setIsOpen(false)}>
+          <DropdownMenuItem className="cursor-pointer text-gray-300 focus:bg-gray-800 focus:text-indigo-300">
+            <Settings className="mr-2 h-4 w-4" />
+            <span>Settings</span>
           </DropdownMenuItem>
-        </DropdownMenuGroup>
+        </Link>
         <DropdownMenuSeparator className="bg-gray-800" />
         <DropdownMenuItem 
-          className="flex cursor-pointer items-center text-red-400 focus:bg-gray-800 focus:text-red-400" 
-          onClick={() => signOut()}
+          className="cursor-pointer text-gray-300 focus:bg-gray-800 focus:text-indigo-300"
+          onClick={async () => {
+            await supabase.auth.signOut();
+            setIsOpen(false);
+          }}
         >
           <LogOut className="mr-2 h-4 w-4" />
           <span>Log out</span>

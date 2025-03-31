@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from "@/app/components/ui/card";
 import { AlertTriangle, Eye, EyeOff, Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase"; // Import supabase client
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -30,7 +31,7 @@ export default function SignUpPage() {
     name: "",
     username: "",
     fplTeamId: "",
-    fplTeamName: "", // Add this field
+    fplTeamName: "",
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -82,11 +83,14 @@ export default function SignUpPage() {
     }
   };
 
+  // Updated handleSubmit function to use Supabase
+  // Updated handleSubmit function to fix profile creation
+  // Updated handleSubmit function to match the profiles table schema
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
-
+  
     // Verify team ID if not already verified
     if (!teamIdVerified) {
       const isVerified = await verifyFplTeamId();
@@ -95,28 +99,39 @@ export default function SignUpPage() {
         return;
       }
     }
-
+  
     try {
-      const response = await fetch("/api/auth/signup", {
-        method: "POST",
+      // Instead of using Supabase Auth signUp directly, use our magic link approach
+      const response = await fetch('/api/auth/send-magic-link', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...formData,
-          fplTeamId: parseInt(formData.fplTeamId),
+        body: JSON.stringify({ 
+          email: formData.email,
+          redirectTo: `${window.location.origin}/auth/callback`,
+          userData: {
+            name: formData.name,
+            username: formData.username,
+            password: formData.password,
+            fplTeamId: parseInt(formData.fplTeamId),
+            fplTeamName: formData.fplTeamName,
+            isNewUser: true
+          }
         }),
       });
-
+      
       const data = await response.json();
-
+      
       if (!response.ok) {
-        throw new Error(data.error || "Failed to create account");
+        throw new Error(data.error || 'Failed to create account');
       }
-
-      // Redirect to email verification page
-      router.push(`/auth/verify-email?userId=${data.userId}&email=${encodeURIComponent(formData.email)}`);
+  
+      // Redirect to a waiting page with magic=true parameter
+      router.push(`/auth/verify-email?email=${encodeURIComponent(formData.email)}&magic=true`);
+      
     } catch (error: any) {
+      console.error("Sign-up error:", error);
       setError(error.message || "An error occurred. Please try again.");
     } finally {
       setIsLoading(false);

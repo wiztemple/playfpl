@@ -3,17 +3,42 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useSession } from 'next-auth/react';
 import { Menu, X, Wallet, Home, Trophy, HelpCircle, ChevronDown } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import UserNav from './UserNav';
+import { supabase } from '@/lib/supabase';
+import { User } from '@supabase/supabase-js';
 
 export default function MainNav() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
-  const { data: session } = useSession();
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Get the current user from Supabase
+  useEffect(() => {
+    const getUser = async () => {
+      setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user || null);
+      setLoading(false);
+      
+      // Set up auth state change listener
+      const { data: { subscription } } = await supabase.auth.onAuthStateChange(
+        (_event, session) => {
+          setUser(session?.user || null);
+        }
+      );
+      
+      return () => {
+        subscription.unsubscribe();
+      };
+    };
+    
+    getUser();
+  }, []);
 
   // Handle scroll effect for transparent to solid transition
   useEffect(() => {
@@ -91,7 +116,7 @@ export default function MainNav() {
               </Link>
               <nav className="ml-10 hidden md:flex items-center space-x-6">
                 {routes.map((route, index) => {
-                  if (route.auth && !session) return null;
+                  if (route.auth && !user) return null;
                   
                   return (
                     <motion.div
@@ -120,7 +145,7 @@ export default function MainNav() {
               </nav>
             </div>
             <div className="hidden md:flex items-center space-x-4">
-              {session ? (
+              {user ? (
                 <motion.div 
                   className="flex items-center space-x-4"
                   initial={{ opacity: 0, x: 20 }}
@@ -137,7 +162,7 @@ export default function MainNav() {
                       Wallet
                     </Button>
                   </Link>
-                  <UserNav />
+                  <UserNav user={user} />
                 </motion.div>
               ) : (
                 <motion.div 
@@ -190,7 +215,7 @@ export default function MainNav() {
             >
               <div className="container mx-auto px-4 space-y-3">
                 {routes.map((route, index) => {
-                  if (route.auth && !session) return null;
+                  if (route.auth && !user) return null;
                   
                   return (
                     <motion.div
@@ -218,7 +243,7 @@ export default function MainNav() {
                 })}
                 
                 <div className="pt-4 border-t border-gray-800/50 mt-4 flex flex-col space-y-3">
-                  {session ? (
+                  {user ? (
                     <>
                       <motion.div
                         initial={{ opacity: 0, y: 10 }}
@@ -256,15 +281,17 @@ export default function MainNav() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.4 }}
                       >
-                        <Link href="/api/auth/signout" onClick={() => setIsOpen(false)}>
-                          <Button 
-                            variant="outline" 
-                            className="w-full border-gray-700/70 text-gray-300 hover:bg-gray-800/70 hover:text-indigo-400 transition-all duration-200" 
-                            size="sm"
-                          >
-                            Sign Out
-                          </Button>
-                        </Link>
+                        <Button 
+                          variant="outline" 
+                          className="w-full border-gray-700/70 text-gray-300 hover:bg-gray-800/70 hover:text-indigo-400 transition-all duration-200" 
+                          size="sm"
+                          onClick={async () => {
+                            await supabase.auth.signOut();
+                            setIsOpen(false);
+                          }}
+                        >
+                          Sign Out
+                        </Button>
                       </motion.div>
                     </>
                   ) : (
