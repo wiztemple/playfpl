@@ -64,7 +64,7 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         email,
-        amount: Math.round(amount * 100), // Convert to kobo
+        amount: Math.round(amount * 100), // Convert to kobo FOR PAYSTACK ONLY
         reference,
         callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/wallet/verify-deposit`,
         metadata: {
@@ -88,58 +88,71 @@ export async function POST(request: Request) {
       );
     }
 
-    // Calculate amount in kobo (smallest currency unit)
-    const amountInKobo = Math.round(amount * 100);
-
-    // Create a pending transaction record
+    // Create a pending transaction record - STORE AS NAIRA in DB
     try {
-      // Simplify the transaction data to avoid potential format issues
       await prisma.transaction.create({
         data: {
           userId: session.user.id,
           walletId: wallet.id,
           type: "deposit",
-          amount: amountInKobo,
+          amount: amount, // Store in naira (NOT kobo)
           currency: "NGN",
           status: "pending",
           externalReference: reference,
           description: `Wallet deposit of ₦${amount}`
         }
       });
-      
+
       console.log(`Successfully created transaction record for reference: ${reference}`);
     } catch (transactionError) {
       console.error("Transaction creation error:", transactionError);
       // Continue with the payment flow even if transaction recording fails
     }
 
-    // Update the wallet balance in a transaction to ensure consistency
-    await prisma.$transaction(async (prisma) => {
-      // Create the transaction record
-      await prisma.transaction.create({
-        data: {
-          userId: session.user.id,
-          walletId: wallet.id,
-          type: "deposit",
-          amount: amountInKobo,
-          currency: "NGN",
-          status: "completed",
-          externalReference: `fpl_deposit_${Date.now()}_${Math.floor(Math.random() * 1000000)}`,
-          description: `Wallet deposit of ₦${amount}`,
-        },
-      });
-    
-      // Update the wallet balance
-    
-      await prisma.wallet.update({
-        where: { id: wallet.id },
-        data: {
-          balance: {
-            increment: amountInKobo
+    // For DEMO ONLY: Automatically update balance (remove this in production)
+    // This would normally be handled by the webhook from Paystack
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        // Demo auto-complete transaction by UPDATING the existing pending transaction
+        setTimeout(async () => {
+          // First, find the pending transaction
+          const pendingTransaction = await prisma.transaction.findFirst({
+            where: {
+              externalReference: reference,
+              status: "pending"
+            }
+          });
+
+          if (pendingTransaction) {
+            // Update the transaction status to completed
+            await prisma.transaction.update({
+              where: {
+                id: pendingTransaction.id
+              },
+              data: {
+                status: "completed"
+              }
+            });
+
+            // Update the wallet balance
+            await prisma.wallet.update({
+              where: { id: wallet.id },
+              data: {
+                balance: {
+                  increment: amount // Increment by naira amount (NOT kobo)
+                }
+              }
+            });
+
+            console.log(`Demo: Updated transaction ${pendingTransaction.id} to completed`);
+          } else {
+            console.log(`Warning: Could not find pending transaction with reference ${reference}`);
           }
-        }
-      });
-    });
+        }, 3000);
+      } catch (demoError) {
+        console.error("Demo auto-complete error:", demoError);
+      }
+    }
 
     return NextResponse.json({
       success: true,

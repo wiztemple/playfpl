@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Info, AlertTriangle, Sparkles, Trophy, DollarSign, Users, Calendar, ShieldAlert } from "lucide-react";
+import { ChevronLeft, Info, AlertTriangle, Sparkles, Trophy, Users, Calendar, ShieldAlert } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import {
   Card,

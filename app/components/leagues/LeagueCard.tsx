@@ -31,6 +31,20 @@ export default function LeagueCard({
   onView,
   mode,
 }: LeagueCardProps) {
+  // Generate a random color palette for each card
+  const [colorPalette] = useState(() => {
+    const palettes = [
+      { from: "from-indigo-900/20", to: "to-purple-900/10", accent: "bg-indigo-600/20", accent2: "bg-purple-600/10" },
+      { from: "from-blue-900/20", to: "to-cyan-900/10", accent: "bg-blue-600/20", accent2: "bg-cyan-600/10" },
+      { from: "from-emerald-900/20", to: "to-teal-900/10", accent: "bg-emerald-600/20", accent2: "bg-teal-600/10" },
+      { from: "from-amber-900/20", to: "to-orange-900/10", accent: "bg-amber-600/20", accent2: "bg-orange-600/10" },
+      { from: "from-rose-900/20", to: "to-pink-900/10", accent: "bg-rose-600/20", accent2: "bg-pink-600/10" },
+      { from: "from-violet-900/20", to: "to-purple-900/10", accent: "bg-violet-600/20", accent2: "bg-purple-600/10" },
+      { from: "from-fuchsia-900/20", to: "to-pink-900/10", accent: "bg-fuchsia-600/20", accent2: "bg-pink-600/10" },
+    ];
+    
+    return palettes[Math.floor(Math.random() * palettes.length)];
+  });
 
   // Simple function to calculate prize pool without complex logic
   const calculatePrizePool = () => {
@@ -108,10 +122,10 @@ export default function LeagueCard({
       className="h-full"
     >
       <Card className="backdrop-blur-md bg-gray-900/60 border border-gray-800 shadow-xl hover:shadow-indigo-500/20 hover:border-indigo-500/50 transition-all duration-300 relative overflow-hidden h-full">
-        {/* Enhanced background effects */}
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/20 to-purple-900/10 rounded-xl pointer-events-none"></div>
-        <div className="absolute -right-20 -top-20 w-40 h-40 bg-indigo-600/20 rounded-full blur-3xl"></div>
-        <div className="absolute -left-20 -bottom-20 w-40 h-40 bg-purple-600/10 rounded-full blur-3xl"></div>
+        {/* Enhanced background effects with dynamic colors */}
+        <div className={`absolute inset-0 bg-gradient-to-br ${colorPalette.from} ${colorPalette.to} rounded-xl pointer-events-none`}></div>
+        <div className={`absolute -right-20 -top-20 w-40 h-40 ${colorPalette.accent} rounded-full blur-3xl`}></div>
+        <div className={`absolute -left-20 -bottom-20 w-40 h-40 ${colorPalette.accent2} rounded-full blur-3xl`}></div>
         
         {/* Card hologram effect */}
         <div className="absolute top-5 right-5 w-8 h-8 rounded-full bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-500 opacity-70 blur-sm"></div>

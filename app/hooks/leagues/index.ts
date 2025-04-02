@@ -1,6 +1,7 @@
 import { LeaderboardEntry, WeeklyLeague } from "@/app/types";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
+import { useDeadlineCheck } from "./useDeadlineCheck";
 
 export function useAvailableLeagues(gameweek?: number) {
     return useQuery({
@@ -32,15 +33,38 @@ export function useAvailableLeagues(gameweek?: number) {
 }
 
 export function useMyLeagues() {
+    const { data: session, status } = useSession();
+
     return useQuery({
-        queryKey: ['leagues', 'my-leagues'],
+        queryKey: ['leagues', 'my-leagues', status],
         queryFn: async () => {
+            // If not authenticated, throw an error that can be caught by the component
+            if (status === "unauthenticated") {
+                throw new Error('AUTH_REQUIRED');
+            }
+
+            // Don't attempt to fetch until we know auth status
+            if (status === "loading") {
+                return [];
+            }
+
             const response = await fetch('/api/leagues/weekly?filter=my-leagues');
+
             if (!response.ok) {
+                if (response.status === 401) {
+                    throw new Error('AUTH_REQUIRED');
+                }
                 throw new Error('Failed to fetch my leagues');
             }
+
             return response.json() as Promise<WeeklyLeague[]>;
         },
+        // Only refetch when authentication status changes
+        enabled: status !== "loading",
+        // Don't retry on AUTH_REQUIRED errors
+        retry: (failureCount, error) => {
+            return !(error instanceof Error && error.message === 'AUTH_REQUIRED') && failureCount < 3;
+        }
     });
 }
 
@@ -83,7 +107,6 @@ export function useLeague(leagueId: string) {
     });
 }
 
-
 export function useGameweekInfo(gameweek?: number) {
     return useQuery({
         queryKey: ['gameweek', gameweek],
@@ -98,53 +121,34 @@ export function useGameweekInfo(gameweek?: number) {
     });
 }
 
-export function useLeagueJoinability(gameweek?: number, minutesThreshold: number = 20) {
-    const gameweekQuery = useGameweekInfo(gameweek);
-
-    const isJoinDisabled = () => {
-        if (!gameweekQuery.data?.fixtures || gameweekQuery.data.fixtures.length === 0) {
-            return false;
-        }
-
-        // Sort fixtures by kickoff time
-        const sortedFixtures = [...gameweekQuery.data.fixtures].sort(
-            (a, b) => new Date(a.kickoff_time).getTime() - new Date(b.kickoff_time).getTime()
-        );
-
-        // Get the first fixture
-        const firstFixture = sortedFixtures[0];
-        const firstKickoff = new Date(firstFixture.kickoff_time);
-        const now = new Date();
-
-        // Calculate minutes until kickoff
-        const minutesUntilKickoff = (firstKickoff.getTime() - now.getTime()) / (1000 * 60);
-
-        // Return true if joining should be disabled (less than threshold minutes until kickoff)
-        return minutesUntilKickoff <= minutesThreshold;
-    };
-
-    return {
-        ...gameweekQuery,
-        isJoinDisabled: isJoinDisabled(),
-        minutesUntilFirstKickoff: gameweekQuery.data?.fixtures ?
-            Math.floor((new Date(gameweekQuery.data.fixtures[0]?.kickoff_time).getTime() - new Date().getTime()) / (1000 * 60)) :
-            null
-    };
-}
-
-
 export function useLeaderboard(leagueId: string, leagueStatus?: string) {
+    // Get gameweek info for the league to check if games are in progress
+    const { data: league } = useLeague(leagueId);
+    const { data: gameweekInfo } = useGameweekInfo(league?.gameweek);
+
+    // Use our new hook to check if games are in progress
+    const { isDeadlinePassed, gamesInProgress } = useDeadlineCheck(
+        gameweekInfo?.deadline_time,
+        gameweekInfo?.fixtures
+    );
+
     return useQuery({
-        queryKey: ['leaderboard', leagueId, leagueStatus],
+        queryKey: ['leaderboard', leagueId, leagueStatus, isDeadlinePassed, gamesInProgress],
         queryFn: async () => {
+            // Add timestamp to prevent caching
+            const timestamp = new Date().getTime();
+            console.log(`Fetching leaderboard for league ${leagueId} (status: ${leagueStatus}, games in progress: ${gamesInProgress})`);
+
             if (leagueStatus === 'active' || leagueStatus === 'completed') {
-                const response = await fetch(`/api/leagues/weekly/${leagueId}/leaderboard`);
+                const response = await fetch(`/api/leagues/weekly/${leagueId}/leaderboard?_=${timestamp}`);
                 if (!response.ok) {
                     throw new Error('Failed to fetch leaderboard');
                 }
-                return response.json() as Promise<LeaderboardEntry[]>;
+                const data = await response.json();
+                // Handle both formats (array or object with leaderboard property)
+                return Array.isArray(data) ? data : data.leaderboard || [];
             } else {
-                const response = await fetch(`/api/leagues/weekly/${leagueId}/participants`);
+                const response = await fetch(`/api/leagues/weekly/${leagueId}/participants?_=${timestamp}`);
                 if (!response.ok) {
                     throw new Error('Failed to fetch participants');
                 }
@@ -153,5 +157,50 @@ export function useLeaderboard(leagueId: string, leagueStatus?: string) {
             }
         },
         enabled: !!leagueId && !!leagueStatus,
+        // For active leagues with games in progress, refresh more frequently
+        refetchInterval: (leagueStatus === 'active' && gamesInProgress) ? 30000 : // Every 30 seconds during games
+            (leagueStatus === 'active') ? 60000 : // Every minute for active leagues
+                false, // No auto-refresh for other leagues
+        // Always refetch when window regains focus
+        refetchOnWindowFocus: true,
+        // Shorter stale time during games
+        staleTime: (leagueStatus === 'active' && gamesInProgress) ? 15000 : // 15s during games
+            (leagueStatus === 'active') ? 30000 : // 30s for active leagues
+                300000, // 5min for others
     });
+}
+
+export function useLeagueJoinability(gameweek?: number, minutesThreshold: number = 10) {
+    const gameweekQuery = useGameweekInfo(gameweek);
+
+    // Only calculate if we have fixtures data
+    if (!gameweekQuery.data?.fixtures || gameweekQuery.data.fixtures.length === 0) {
+        return {
+            ...gameweekQuery,
+            isJoinDisabled: false,
+            minutesUntilFirstKickoff: null
+        };
+    }
+
+    // Sort fixtures by kickoff time
+    const sortedFixtures = [...gameweekQuery.data.fixtures].sort(
+        (a, b) => new Date(a.kickoff_time).getTime() - new Date(b.kickoff_time).getTime()
+    );
+
+    // Get the first fixture
+    const firstFixture = sortedFixtures[0];
+    const firstKickoff = new Date(firstFixture.kickoff_time);
+    const now = new Date();
+
+    // Calculate minutes until kickoff
+    const minutesUntilKickoff = (firstKickoff.getTime() - now.getTime()) / (1000 * 60);
+
+    // Determine if joining should be disabled
+    const isJoinDisabled = minutesUntilKickoff <= minutesThreshold;
+
+    return {
+        ...gameweekQuery,
+        isJoinDisabled,
+        minutesUntilFirstKickoff: Math.floor(minutesUntilKickoff)
+    };
 }

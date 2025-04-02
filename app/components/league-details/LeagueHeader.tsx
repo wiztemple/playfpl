@@ -1,21 +1,24 @@
+
 "use client";
 
-import { motion } from "framer-motion";
-import { Tag } from "lucide-react";
-import { Badge } from "@/app/components/ui/badge";
-import { Button } from "@/app/components/ui/button";
-import { ArrowRight, CheckCircle } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
-import Countdown from "@/app/components/shared/Countdown";
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, AlertTriangle, Calendar, Users, Clock, Trophy, Info, ArrowRight } from "lucide-react";
+import { Button } from "@/app/components/ui/button";
+import { motion } from "framer-motion";
+import { formatCurrency } from "@/lib/utils";
+import { Separator } from "@/app/components/ui/separator";
+import { WeeklyLeague } from "@/app/types";
+import { useAdminStatus } from "@/app/hooks/user/index"
+import Countdown from "@/app/components/shared/Countdown";
+import AdminLeagueActions from "../leagues/AdminLeagueAction";
 
 interface LeagueHeaderProps {
-    league: any;
+    league: WeeklyLeague;
     gameweekInfo: any;
     isJoinDisabled: boolean;
     minutesUntilFirstKickoff: number | null;
     handleJoinLeague: () => void;
+    deadlinePassed?: boolean;
 }
 
 export default function LeagueHeader({
@@ -25,103 +28,163 @@ export default function LeagueHeader({
     minutesUntilFirstKickoff,
     handleJoinLeague,
 }: LeagueHeaderProps) {
-    return (
-        <>
-            <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="mb-8"
-            >
-                <Link href="/leagues/weekly">
-                    <Button variant="ghost" className="pl-0 text-gray-400 hover:text-indigo-400 hover:bg-transparent group transition-all duration-300">
-                        <ChevronLeft className="mr-1 h-4 w-4 group-hover:transform group-hover:-translate-x-1 transition-transform duration-300" />
-                        <span className="relative">
-                            Back to All Leagues
-                            <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-indigo-500 group-hover:w-full transition-all duration-300"></span>
-                        </span>
-                    </Button>
-                </Link>
-            </motion.div>
 
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: 0.1 }}
-                className="mb-8"
-            >
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                    <div>
-                        <div className="flex items-center gap-2 mb-2">
-                            <Badge className={`
-                ${league.status === "upcoming" ? "bg-blue-600" :
-                                    league.status === "active" ? "bg-green-600" :
-                                        league.status === "completed" ? "bg-purple-600" : "bg-gray-600"}
-              `}>
-                                {league.status === "upcoming" ? "Upcoming" :
-                                    league.status === "active" ? "Active" :
-                                        league.status === "completed" ? "Completed" : league.status}
-                            </Badge>
-                            <Badge className="bg-indigo-600">Gameweek {league.gameweek}</Badge>
+    // Get admin status
+    const adminStatusQuery = useAdminStatus();
+    const isAdmin = adminStatusQuery.data?.isAdmin || false;
+
+    // Check if deadline has passed directly in the component
+    const now = new Date();
+    const deadlineTime = gameweekInfo?.deadline_time ? new Date(gameweekInfo.deadline_time) : null;
+    const isDeadlinePassed = deadlineTime ? now > deadlineTime : false;
+
+    // Use either the passed prop or our direct check
+    const joinDisabled = isJoinDisabled || isDeadlinePassed;
+
+    const getButtonText = () => {
+        if (isDeadlinePassed) return "Gameweek Started";
+        if (isJoinDisabled) return "Joining Closed";
+        return "Join League";
+    };
+
+    // Calculate prize pool
+    const calculatePrizePool = () => {
+        const totalEntries = league.currentParticipants;
+        const totalPool = totalEntries * league.entryFee;
+        const platformFee = totalPool * (league.platformFeePercentage / 100);
+        return totalPool - platformFee;
+    };
+
+    const prizePool = calculatePrizePool();
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="mb-8"
+        >
+            <div className="flex flex-col space-y-4">
+                <div className="flex items-center justify-between">
+                    <Link href="/leagues/weekly">
+                        <Button variant="ghost" className="pl-0 text-gray-400 hover:text-indigo-400 hover:bg-transparent">
+                            <ChevronLeft className="mr-1 h-4 w-4" />
+                            Back to Leagues
+                        </Button>
+                    </Link>
+
+                    {/* Admin Actions */}
+                    {isAdmin && <AdminLeagueActions league={league} isAdmin={!!isAdmin} />}
+                </div>
+
+                <motion.h1
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.1 }}
+                    className="text-3xl font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent"
+                >
+                    {league.name}
+                </motion.h1>
+
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mt-2 mb-4 gap-4">
+                    <div className="grid grid-cols-2 sm:flex gap-4 sm:gap-6">
+                        <div className="flex items-center text-purple-400">
+                            <Calendar className="h-4 w-4 mr-1.5" />
+                            <span className="text-sm text-gray-300">Gameweek {league.gameweek}</span>
                         </div>
-                        <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-                            {league.name}
-                        </h1>
+                        <div className="flex items-center text-indigo-400">
+                            <Users className="h-4 w-4 mr-1.5" />
+                            <span className="text-sm text-gray-300">
+                                {league.currentParticipants}/{league.maxParticipants} Players
+                            </span>
+                        </div>
+                        <div className="flex items-center text-cyan-400">
+                            <Clock className="h-4 w-4 mr-1.5" />
+                            <span className="text-sm text-gray-300">
+                                {league.status === "upcoming"
+                                    ? "Upcoming"
+                                    : league.status === "active"
+                                        ? "Live"
+                                        : "Completed"}
+                            </span>
+                        </div>
+                        <div className="flex items-center text-green-400">
+                            <Trophy className="h-4 w-4 mr-1.5" />
+                            <span className="text-sm text-gray-300">
+                                Prize: {formatCurrency(prizePool)}
+                            </span>
+                        </div>
                     </div>
+
                     {league.status === "upcoming" && !league.hasJoined && (
-                        <motion.div
-                            whileHover={{ scale: isJoinDisabled ? 1 : 1.05 }}
-                            whileTap={{ scale: isJoinDisabled ? 1 : 0.95 }}
+                        <Button
+                            className={`text-white bg-gradient-to-r ${joinDisabled
+                                ? "from-gray-500 to-gray-600 cursor-not-allowed opacity-70"
+                                : "from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+                                } border-0 shadow-lg`}
+                            onClick={handleJoinLeague}
+                            disabled={joinDisabled}
                         >
-                            <Button
-                                className={`text-white bg-gradient-to-r ${isJoinDisabled
-                                    ? "from-gray-500 to-gray-600 cursor-not-allowed opacity-70"
-                                    : "from-orange-500 to-red-500 hover:from-indigo-600 hover:to-purple-600"
-                                    } border-0 shadow-lg`}
-                                onClick={handleJoinLeague}
-                                size="lg"
-                                disabled={isJoinDisabled}
-                            >
-                                {isJoinDisabled
-                                    ? `Joining Closed (${minutesUntilFirstKickoff} mins to kickoff)`
-                                    : "Join League"}
-                                {!isJoinDisabled && <ArrowRight className="ml-2 h-4 w-4" />}
-                            </Button>
-                        </motion.div>
+                            {getButtonText()}
+                            {!joinDisabled && <ArrowRight className="ml-2 h-4 w-4" />}
+                        </Button>
                     )}
 
                     {league.hasJoined && (
-                        <div className="bg-gradient-to-r from-green-900/30 to-emerald-900/30 p-3 rounded-lg border border-green-800/50 flex items-center">
-                            <CheckCircle className="h-5 w-5 text-green-400 mr-2" />
-                            <span className="font-medium text-green-400">You've joined this league</span>
+                        <div className="px-3 py-1.5 rounded-full bg-green-600/20 border border-green-500/30 text-green-400 flex items-center text-sm font-medium">
+                            <Trophy className="h-4 w-4 mr-1.5" />
+                            You have joined this league
                         </div>
                     )}
                 </div>
 
-                {/* Countdown timers */}
-                {league.status === "upcoming" && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ duration: 0.5, delay: 0.3 }}
-                        className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6"
-                    >
-                        {league.startDate && new Date(league.startDate) > new Date() && (
-                            <Countdown
-                                targetDate={league.startDate}
-                                label="League Starts In"
-                            />
-                        )}
-
-                        {gameweekInfo && gameweekInfo.deadline_time && (
-                            <Countdown
-                                targetDate={gameweekInfo.deadline_time}
-                                label="Gameweek Deadline"
-                            />
-                        )}
-                    </motion.div>
+                {/* Countdown Timer */}
+                {league.status === "upcoming" && gameweekInfo && gameweekInfo.deadline_time && (
+                    <div className="p-4 bg-gray-800/50 border border-gray-700 rounded-lg">
+                        <Countdown
+                            targetDate={gameweekInfo.deadline_time}
+                            label="Gameweek Deadline"
+                        />
+                    </div>
                 )}
-            </motion.div>
-        </>
+
+                {/* Add a message when deadline has passed */}
+                {league.status === "upcoming" && isDeadlinePassed && (
+                    <div className="p-3 bg-red-900/30 border border-red-800/50 rounded-lg flex items-center mt-2">
+                        <AlertTriangle className="h-5 w-5 mr-2 text-red-400 flex-shrink-0" />
+                        <p className="text-sm text-red-200">
+                            Joining is no longer available because the gameweek deadline has passed.
+                        </p>
+                    </div>
+                )}
+
+                {/* Existing message for when joining is disabled due to kickoff time */}
+                {league.status === "upcoming" && isJoinDisabled && minutesUntilFirstKickoff !== null && (
+                    <div className="p-3 bg-amber-900/30 border border-amber-800/50 rounded-lg flex items-center mt-2">
+                        <AlertTriangle className="h-5 w-5 mr-2 text-amber-400 flex-shrink-0" />
+                        <p className="text-sm text-amber-200">
+                            Joining is closed because the first match starts in{" "}
+                            {minutesUntilFirstKickoff < 60
+                                ? `${minutesUntilFirstKickoff} minutes`
+                                : `${Math.floor(minutesUntilFirstKickoff / 60)} hours ${minutesUntilFirstKickoff % 60
+                                } minutes`}
+                            .
+                        </p>
+                    </div>
+                )}
+
+                {league.status === "upcoming" && gameweekInfo && (
+                    <div className="p-3 bg-gray-800/50 border border-gray-700 rounded-lg flex items-center">
+                        <Info className="h-5 w-5 mr-2 text-gray-400 flex-shrink-0" />
+                        <p className="text-sm text-gray-300">
+                            Gameweek {league.gameweek} deadline:{" "}
+                            {new Date(gameweekInfo.deadline_time).toLocaleString()}
+                        </p>
+                    </div>
+                )}
+
+                <Separator className="bg-gray-800 my-6" />
+            </div>
+        </motion.div>
     );
 }

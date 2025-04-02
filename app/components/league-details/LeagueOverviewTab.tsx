@@ -16,7 +16,6 @@ import {
   Trophy,
   Shield,
   Info,
-  AlertTriangle,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import PrizePoolCard from "./PrizePoolCard";

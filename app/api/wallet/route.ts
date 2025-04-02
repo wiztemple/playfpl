@@ -34,14 +34,15 @@ export async function GET(request: Request) {
       );
     }
 
-    // Format amounts to be in the correct units (NGN is stored in kobo)
+    // All database amounts are stored in the primary currency unit (naira, not kobo)
+    // No need to convert - just return as is
     const formattedTransactions = wallet.transactions.map(transaction => ({
       ...transaction,
-      amount: transaction.amount / 100, // Convert from kobo to naira
+      amount: transaction.amount, // Already in naira, no conversion needed
     }));
 
     return NextResponse.json({
-      balance: wallet.balance / 100, // Convert from kobo to naira
+      balance: wallet.balance, // Already in naira, no conversion needed
       currency: wallet.currency,
       transactions: formattedTransactions
     });

@@ -48,10 +48,10 @@ const createLeagueSchema = z.object({
   }
 
   // Validate number of positions
-  const expectedPositions = data.leagueType === 'tri' ? 3 
-    : data.leagueType === 'duo' ? 2 
-    : 1;
-  
+  const expectedPositions = data.leagueType === 'tri' ? 3
+    : data.leagueType === 'duo' ? 2
+      : 1;
+
   if (data.prizeDistribution.length !== expectedPositions) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -65,7 +65,6 @@ export async function POST(request: Request) {
   try {
     // Check authentication
     const session = await getServerSession(authOptions);
-    console.log("Session:", session); 
 
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -76,7 +75,7 @@ export async function POST(request: Request) {
 
     // Parse and validate request body
     const body = await request.json();
-    console.log("Raw request body:", body);
+
     const validationResult = createLeagueSchema.safeParse(body);
 
     if (!validationResult.success) {
@@ -90,28 +89,19 @@ export async function POST(request: Request) {
     }
 
     const data = validationResult.data;
-    console.log("Validated league type:", data.leagueType); // Add this line to debug
 
     // Validate gameweek exists in FPL
     try {
       const gameweekInfo = await getGameweekInfo(data.gameweek);
-      console.log("Gameweek info:", gameweekInfo);
-      
+
       // Use the actual gameweek deadline and end date
       const gameweekDeadline = new Date(gameweekInfo.deadline_time);
       const gameweekEnd = new Date(gameweekInfo.gameweek_end);
       const startDate = new Date(data.startDate);
-      
+
       // Set end date to 23:59:59.999 on the same day as the last fixture (April 3rd)
       const endDate = new Date(gameweekEnd);
       endDate.setHours(23, 59, 59, 999); // Use local time instead of UTC
-
-      console.log("Date calculations:", {
-        startDate,
-        gameweekDeadline,
-        gameweekEnd,
-        endDate
-      });
 
       if (startDate > gameweekDeadline) {
         return NextResponse.json(
@@ -139,7 +129,6 @@ export async function POST(request: Request) {
           })),
         },
       };
-      console.log("League data to be created:", leagueData); // This log already exists
 
       // Create the league in the database
       const league = await prisma.weeklyLeague.create({
@@ -151,19 +140,13 @@ export async function POST(request: Request) {
 
       return NextResponse.json(league);
     } catch (error: any) {
-      console.error("Detailed error:", {
-        message: error.message,
-        code: error.code,
-        meta: error.meta,
-        stack: error.stack
-      });
+
       return NextResponse.json(
         { error: "Failed to create league", details: error.message },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error("Error validating gameweek:", error);
     return NextResponse.json(
       { error: "Invalid gameweek or error fetching gameweek data" },
       { status: 400 }

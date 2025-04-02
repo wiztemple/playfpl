@@ -41,7 +41,6 @@ export async function POST(request: Request) {
 
         return NextResponse.json({ received: true });
     } catch (error) {
-        console.error('Error processing webhook:', error);
         return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
     }
 }
@@ -65,7 +64,6 @@ async function handleChargeSuccess(data: any) {
     });
 
     if (!transaction) {
-        console.error(`Transaction not found for reference: ${reference}`);
         return;
     }
 
@@ -98,7 +96,6 @@ async function handleTransferSuccess(data: any) {
     });
 
     if (!transaction) {
-        console.error(`Transaction not found for reference: ${reference}`);
         return;
     }
 
@@ -118,7 +115,6 @@ async function handleTransferFailed(data: any) {
     });
 
     if (!transaction) {
-        console.error(`Transaction not found for reference: ${reference}`);
         return;
     }
 
@@ -128,7 +124,6 @@ async function handleTransferFailed(data: any) {
     });
 
     if (!wallet) {
-        console.error(`Wallet not found for transaction: ${transaction.id}`);
         return;
     }
 

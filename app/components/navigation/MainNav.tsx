@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { Menu, X, Wallet, Home, Trophy, HelpCircle, ChevronDown } from 'lucide-react';
+import { Menu, X, Wallet, Home, Trophy, HelpCircle, ChevronDown, Sparkles } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import UserNav from './UserNav';
@@ -66,7 +66,7 @@ export default function MainNav() {
       <header 
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
           scrolled 
-            ? 'bg-gray-950/95 backdrop-blur-md border-b border-gray-800/80 shadow-lg shadow-black/20' 
+            ? 'bg-gray-950/90 backdrop-blur-xl border-b border-gray-800/80 shadow-lg shadow-purple-900/10' 
             : 'bg-transparent backdrop-blur-sm'
         }`}
       >
@@ -74,20 +74,30 @@ export default function MainNav() {
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center">
               <Link href="/" className="flex items-center group relative">
-                <motion.span 
-                  className="text-xl font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent group-hover:from-indigo-300 group-hover:via-purple-300 group-hover:to-pink-300 transition-all duration-300"
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5 }}
-                >
-                  FPL Stakes
-                </motion.span>
-                <motion.div 
-                  className="absolute -bottom-1 left-0 h-0.5 bg-gradient-to-r from-indigo-500 to-purple-500 w-0 group-hover:w-full transition-all duration-300"
-                  initial={{ width: 0 }}
-                  animate={{ width: scrolled ? "100%" : 0 }}
-                  transition={{ duration: 0.3 }}
-                />
+                <div className="relative">
+                  <motion.span 
+                    className="text-xl font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent group-hover:from-indigo-300 group-hover:via-purple-300 group-hover:to-pink-300 transition-all duration-300"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
+                  >
+                    FPL Stakes
+                  </motion.span>
+                  <motion.div 
+                    className="absolute -bottom-1 left-0 h-0.5 bg-gradient-to-r from-indigo-500 to-purple-500 w-0 group-hover:w-full transition-all duration-300"
+                    initial={{ width: 0 }}
+                    animate={{ width: scrolled ? "100%" : 0 }}
+                    transition={{ duration: 0.3 }}
+                  />
+                  <motion.div
+                    className="absolute -top-1 -right-6 text-yellow-400"
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.5, delay: 0.3 }}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                  </motion.div>
+                </div>
               </Link>
               <nav className="ml-10 hidden md:flex items-center space-x-6">
                 {routes.map((route, index) => {
@@ -102,17 +112,22 @@ export default function MainNav() {
                     >
                       <Link
                         href={route.href}
-                        className={`text-sm font-medium transition-colors relative group flex items-center ${
-                          route.active ? 'text-indigo-400' : 'text-gray-300'
+                        className={`text-sm font-medium transition-colors relative group flex items-center px-3 py-2 rounded-md ${
+                          route.active 
+                            ? 'text-white bg-gradient-to-br from-indigo-900/40 to-purple-900/40 border border-indigo-800/30' 
+                            : 'text-gray-300 hover:text-white hover:bg-gray-800/30'
                         }`}
                       >
                         <span className="flex items-center">
                           {route.icon}
                           {route.label}
                         </span>
-                        <span className={`absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-indigo-400 to-purple-400 transition-all duration-300 group-hover:w-full ${
-                          route.active ? 'w-full' : 'w-0'
-                        }`}></span>
+                        {route.active && (
+                          <motion.span 
+                            className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-indigo-400 to-purple-400"
+                            layoutId="activeNavIndicator"
+                          />
+                        )}
                       </Link>
                     </motion.div>
                   );
@@ -131,7 +146,7 @@ export default function MainNav() {
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="border-indigo-600/40 bg-indigo-950/30 text-indigo-300 hover:bg-indigo-900/40 hover:text-indigo-200 hover:border-indigo-500/60 transition-all duration-200 backdrop-blur-sm shadow-sm flex items-center"
+                      className="border-indigo-600/40 bg-indigo-950/30 text-indigo-300 hover:bg-indigo-900/40 hover:text-indigo-200 hover:border-indigo-500/60 transition-all duration-200 backdrop-blur-sm shadow-md shadow-indigo-900/20 flex items-center"
                     >
                       <Wallet className="h-3.5 w-3.5 mr-1.5" />
                       Wallet
@@ -150,7 +165,7 @@ export default function MainNav() {
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="border-purple-600/40 bg-purple-950/30 text-purple-300 hover:bg-purple-900/40 hover:text-purple-200 hover:border-purple-500/60 transition-all duration-200 backdrop-blur-sm shadow-sm"
+                      className="border-purple-600/40 bg-purple-950/30 text-purple-300 hover:bg-purple-900/40 hover:text-purple-200 hover:border-purple-500/60 transition-all duration-200 backdrop-blur-sm shadow-md shadow-purple-900/20"
                     >
                       Sign In
                     </Button>
@@ -158,10 +173,11 @@ export default function MainNav() {
                   <Link href="/auth/signup">
                     <Button 
                       size="sm" 
-                      className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md hover:shadow-indigo-500/20 transition-all duration-200 relative overflow-hidden group"
+                      className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md shadow-indigo-500/30 transition-all duration-200 relative overflow-hidden group"
                     >
                       <span className="relative z-10">Sign Up</span>
                       <span className="absolute inset-0 bg-gradient-to-r from-indigo-700 to-purple-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                      <span className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rotate-180"></span>
                     </Button>
                   </Link>
                 </motion.div>
@@ -169,11 +185,11 @@ export default function MainNav() {
             </div>
 
             <motion.button
-              className="md:hidden text-gray-300 hover:text-indigo-400 transition-colors"
+              className="md:hidden text-gray-300 hover:text-indigo-400 transition-colors bg-gray-900/50 p-2 rounded-md border border-gray-800/50"
               onClick={() => setIsOpen(!isOpen)}
               whileTap={{ scale: 0.95 }}
             >
-              {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </motion.button>
           </div>
         </div>
@@ -182,7 +198,7 @@ export default function MainNav() {
         <AnimatePresence>
           {isOpen && (
             <motion.div 
-              className="md:hidden border-t border-gray-800/50 py-4 bg-gray-900/95 backdrop-blur-xl shadow-lg"
+              className="md:hidden border-t border-gray-800/50 py-4 bg-gray-900/95 backdrop-blur-xl shadow-lg shadow-purple-900/10"
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
@@ -201,9 +217,9 @@ export default function MainNav() {
                     >
                       <Link
                         href={route.href}
-                        className={`block text-sm font-medium transition-colors hover:text-indigo-400 py-3 px-2 rounded-md ${
+                        className={`block text-sm font-medium transition-colors hover:text-indigo-400 py-3 px-4 rounded-lg ${
                           route.active 
-                            ? 'text-indigo-400 bg-indigo-900/20 border-l-2 border-indigo-500 pl-3' 
+                            ? 'text-white bg-gradient-to-r from-indigo-900/40 to-purple-900/40 border border-indigo-800/30' 
                             : 'text-gray-300'
                         }`}
                         onClick={() => setIsOpen(false)}
@@ -228,7 +244,7 @@ export default function MainNav() {
                         <Link href="/wallet" onClick={() => setIsOpen(false)}>
                           <Button 
                             variant="outline" 
-                            className="w-full border-indigo-600/40 bg-indigo-950/30 text-indigo-300 hover:bg-indigo-900/40 hover:text-indigo-200 hover:border-indigo-500/60 transition-all duration-200 backdrop-blur-sm flex items-center justify-center" 
+                            className="w-full border-indigo-600/40 bg-indigo-950/30 text-indigo-300 hover:bg-indigo-900/40 hover:text-indigo-200 hover:border-indigo-500/60 transition-all duration-200 backdrop-blur-sm flex items-center justify-center shadow-md shadow-indigo-900/10" 
                             size="sm"
                           >
                             <Wallet className="h-4 w-4 mr-2" />
@@ -244,7 +260,7 @@ export default function MainNav() {
                         <Link href="/profile" onClick={() => setIsOpen(false)}>
                           <Button 
                             variant="outline" 
-                            className="w-full border-gray-700/70 text-gray-300 hover:bg-gray-800/70 hover:text-indigo-400 transition-all duration-200" 
+                            className="w-full border-gray-700/70 text-gray-300 hover:bg-gray-800/70 hover:text-indigo-400 transition-all duration-200 shadow-md shadow-gray-900/10" 
                             size="sm"
                           >
                             Profile
@@ -259,7 +275,7 @@ export default function MainNav() {
                         <Link href="/api/auth/signout" onClick={() => setIsOpen(false)}>
                           <Button 
                             variant="outline" 
-                            className="w-full border-gray-700/70 text-gray-300 hover:bg-gray-800/70 hover:text-indigo-400 transition-all duration-200" 
+                            className="w-full border-gray-700/70 text-gray-300 hover:bg-gray-800/70 hover:text-indigo-400 transition-all duration-200 shadow-md shadow-gray-900/10" 
                             size="sm"
                           >
                             Sign Out
@@ -277,7 +293,7 @@ export default function MainNav() {
                         <Link href="/auth/signin" onClick={() => setIsOpen(false)}>
                           <Button 
                             variant="outline" 
-                            className="w-full border-purple-600/40 bg-purple-950/30 text-purple-300 hover:bg-purple-900/40 hover:text-purple-200 hover:border-purple-500/60 transition-all duration-200 backdrop-blur-sm" 
+                            className="w-full border-purple-600/40 bg-purple-950/30 text-purple-300 hover:bg-purple-900/40 hover:text-purple-200 hover:border-purple-500/60 transition-all duration-200 backdrop-blur-sm shadow-md shadow-purple-900/10" 
                             size="sm"
                           >
                             Sign In
@@ -291,10 +307,11 @@ export default function MainNav() {
                       >
                         <Link href="/auth/signup" onClick={() => setIsOpen(false)}>
                           <Button 
-                            className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md hover:shadow-indigo-500/20 transition-all duration-200" 
+                            className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md shadow-indigo-500/30 transition-all duration-200 relative overflow-hidden group" 
                             size="sm"
                           >
-                            Sign Up
+                            <span className="relative z-10">Sign Up</span>
+                            <span className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rotate-180"></span>
                           </Button>
                         </Link>
                       </motion.div>

@@ -88,3 +88,34 @@ export const useUpdateProfile = () => {
         }
     });
 };
+
+export function useAdminStatus() {
+    return useQuery({
+        queryKey: ['adminStatus'],
+        queryFn: async () => {
+            try {
+                const response = await fetch("/api/user/admin-status");
+
+                if (!response.ok) {
+                    throw new Error("Failed to check admin status");
+                }
+
+                const data = await response.json();
+                return { isAdmin: data.isAdmin };
+            } catch (error) {
+                console.error("Error checking admin status:", error);
+                return { isAdmin: false };
+            }
+        },
+        // Transform the response to match the previous hook's return structure
+        select: (data) => ({
+            isAdmin: data.isAdmin,
+            isLoading: false,
+            error: null
+        }),
+        // Provide initial data to match the previous hook's initial state
+        placeholderData: {
+            isAdmin: false
+        }
+    });
+}

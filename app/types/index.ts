@@ -121,58 +121,113 @@ export interface DateRange {
   endDate: string;
 }
 
+// export interface LeaderboardEntry {
+//   id: string;
+//   userId: string;
+//   userName?: string;
+//   teamName: string;
+//   rank?: number;
+//   position?: number;
+//   startPoints?: number;
+//   startingPoints?: number;
+//   starting_points?: number;
+//   weeklyPoints?: number;
+//   gwPoints?: number;
+//   event_total?: number;
+//   finalPoints?: number;
+//   points?: number;
+//   total?: number;
+//   winnings?: number;
+//   joinedAt?: string;
+  
+//   // Team and manager names
+//   team_name?: string;
+//   entry_name?: string;
+//   managerName?: string;
+//   manager_name?: string;
+//   player_name?: string;
+//   displayName?: string;
+//   display_name?: string;
+//   name?: string;
+  
+//   // User and entry info
+//   user?: {
+//     id: string;
+//     name?: string;
+//   };
+//   entry?: {
+//     name?: string;
+//     player_name?: string;
+//   };
+  
+//   // Status flags
+//   has_played?: boolean;
+//   isCurrentUser?: boolean;
+//   is_current_user?: boolean;
+//   current_user?: boolean;
+//   isHighlighted?: boolean;
+//   highlighted?: boolean;
+//   is_highlighted?: boolean;
+  
+//   // GW winner flags
+//   isGwWinner?: boolean;
+//   is_gw_winner?: boolean;
+//   gw_winner?: boolean;
+// }
+
 export interface LeaderboardEntry {
   id: string;
   userId: string;
-  userName?: string;
-  teamName: string;
-  rank?: number;
-  position?: number;
+  rank: number;
+  position: number;
+  
+  // Points
+  points: number;
+  finalPoints: number;
   startPoints?: number;
   startingPoints?: number;
   starting_points?: number;
-  weeklyPoints?: number;
-  gwPoints?: number;
-  event_total?: number;
-  finalPoints?: number;
-  points?: number;
-  total?: number;
-  winnings?: number;
-  joinedAt?: string;
+  pointsAtStart?: number;
+  weeklyPoints: number;
+  gwPoints: number;
+  event_total: number;
+  total: number;
   
-  // Team and manager names
-  team_name?: string;
-  entry_name?: string;
-  managerName?: string;
-  manager_name?: string;
-  player_name?: string;
-  displayName?: string;
-  display_name?: string;
-  name?: string;
+  // Team and user info
+  teamName: string;
+  team_name: string;
+  entry_name: string;
+  userName: string;
+  managerName: string;
+  manager_name: string;
+  player_name: string;
+  displayName: string;
+  display_name: string;
+  name: string;
   
-  // User and entry info
-  user?: {
+  // Entry info
+  user: {
     id: string;
-    name?: string;
+    name: string;
   };
-  entry?: {
-    name?: string;
-    player_name?: string;
+  entry: {
+    name: string;
+    player_name: string;
   };
   
-  // Status flags
-  has_played?: boolean;
-  isCurrentUser?: boolean;
-  is_current_user?: boolean;
-  current_user?: boolean;
-  isHighlighted?: boolean;
-  highlighted?: boolean;
-  is_highlighted?: boolean;
+  // Flags
+  has_played: boolean;
+  isCurrentUser: boolean;
+  is_current_user: boolean;
   
   // GW winner flags
   isGwWinner?: boolean;
   is_gw_winner?: boolean;
   gw_winner?: boolean;
+  
+  // Extra fields
+  joinedAt: string; // Make sure joinedAt is a string
+  winnings?: number;
 }
 
 export interface League {

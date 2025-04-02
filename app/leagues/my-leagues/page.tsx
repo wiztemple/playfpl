@@ -27,7 +27,7 @@ export default function MyLeaguesPage() {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="container mx-auto py-12 px-4 max-w-5xl">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+        <h1 className="text-3xl sm:pb-5 pb-3 font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
           My Leagues
         </h1>
         <motion.div
