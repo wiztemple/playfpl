@@ -10,13 +10,13 @@ import {
   ChevronLeft,
   Clock,
   CreditCard,
-  DollarSign,
   Filter,
   Search,
   Trophy,
   Wallet,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Banknote
 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/app/components/ui/card';
@@ -305,7 +305,7 @@ export default function WalletPage() {
                         {transaction.type === 'deposit' && <ArrowDownLeft className="h-5 w-5" />}
                         {transaction.type === 'withdrawal' && <ArrowUpRight className="h-5 w-5" />}
                         {transaction.type === 'entry_fee' && <Trophy className="h-5 w-5" />}
-                        {transaction.type === 'winnings' && <DollarSign className="h-5 w-5" />}
+                        {transaction.type === 'winnings' && <Banknote className="h-5 w-5" />}
                         {transaction.type === 'refund' && <CreditCard className="h-5 w-5" />}
                         {!['deposit', 'withdrawal', 'entry_fee', 'winnings', 'refund'].includes(transaction.type) && <Wallet className="h-5 w-5" />}
                       </div>
@@ -367,7 +367,7 @@ export default function WalletPage() {
                     variant="outline"
                     className="w-full h-16 flex flex-col items-center justify-center space-y-1 bg-gray-800/50 border-gray-700 hover:bg-gray-700 hover:text-indigo-400 transition-all"
                   >
-                    <DollarSign className="h-5 w-5 text-indigo-400" />
+                    <Banknote className="h-5 w-5 text-indigo-400" />
                     <span>Deposit</span>
                   </Button>
                 </Link>

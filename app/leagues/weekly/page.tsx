@@ -6,8 +6,15 @@ import LeagueList from "@/app/components/leagues/LeagueList";
 import Loading from "@/app/components/shared/Loading";
 import { motion } from "framer-motion";
 import CreateLeagueButton from "@/app/components/CreateLeagueButton";
+import GameWeekSelector from "@/app/components/leagues/GameWeekSelector";
+import { useSearchParams } from "next/navigation";
 
 export default function WeeklyLeaguesPage() {
+  const searchParams = useSearchParams();
+  const gameweek = searchParams.get("gameweek") 
+    ? parseInt(searchParams.get("gameweek")!) 
+    : undefined;
+
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="container mx-auto py-12 px-4 max-w-5xl">
@@ -20,7 +27,10 @@ export default function WeeklyLeaguesPage() {
           <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
             Weekly Mini-Leagues
           </h1>
-          <CreateLeagueButton />
+          <div className="flex items-center gap-3">
+            <GameWeekSelector />
+            <CreateLeagueButton />
+          </div>
         </motion.div>
         <motion.div
           initial={{ opacity: 0 }}
@@ -52,7 +62,7 @@ export default function WeeklyLeaguesPage() {
                   <Loading className="text-indigo-400" />
                 </div>
               }>
-                <LeagueList filter="available" />
+                <LeagueList filter="available" gameweek={gameweek} />
               </Suspense>
             </TabsContent>
 
@@ -62,7 +72,7 @@ export default function WeeklyLeaguesPage() {
                   <Loading className="text-indigo-400" />
                 </div>
               }>
-                <LeagueList filter="my-leagues" />
+                <LeagueList filter="my-leagues" gameweek={gameweek} />
               </Suspense>
             </TabsContent>
           </Tabs>

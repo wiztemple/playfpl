@@ -5,7 +5,7 @@ import {
     CardHeader,
     CardTitle
 } from '@/app/components/ui/card';
-import { Trophy, Users, DollarSign, Percent } from 'lucide-react';
+import { Trophy, Users, Percent, Banknote } from 'lucide-react';
 
 interface StatsOverviewCardProps {
     stats: any;
@@ -54,7 +54,7 @@ export const StatsOverviewCard = ({ stats, formatCurrency }: StatsOverviewCardPr
                 <div className="bg-gray-800/60 rounded-lg p-4 border border-gray-700/50">
                     <div className="flex items-center justify-between mb-2">
                         <h3 className="text-gray-400 text-sm">Total Winnings</h3>
-                        <DollarSign className="h-4 w-4 text-purple-400" />
+                        <Banknote className="h-4 w-4 text-purple-400" />
                     </div>
                     <p className="text-2xl font-bold text-gray-100">
                         {formatCurrency(stats?.totalWinnings || 0)}

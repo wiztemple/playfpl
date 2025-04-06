@@ -5,12 +5,11 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
-import { ChevronLeft, CreditCard, DollarSign, Wallet, Sparkles } from 'lucide-react';
+import { ChevronLeft, CreditCard, Wallet, Sparkles } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Label } from '@/app/components/ui/label';
 import { Input } from '@/app/components/ui/input';
-import { formatCurrency } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import Loading from '@/app/components/shared/Loading';
 import { toast } from 'sonner';
@@ -36,18 +35,18 @@ export default function DepositPage() {
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Remove non-numeric characters except decimal point
     const value = e.target.value.replace(/[^0-9.]/g, '');
-    
+
     // Ensure only one decimal point
     const parts = value.split('.');
     if (parts.length > 2) {
       return;
     }
-    
+
     // Limit to 2 decimal places
     if (parts.length === 2 && parts[1].length > 2) {
       return;
     }
-    
+
     setAmount(value);
     setError(null);
   };
@@ -59,27 +58,27 @@ export default function DepositPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validate amount
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
       setError('Please enter a valid amount');
       return;
     }
-    
+
     if (numAmount < 5) {
       setError('Minimum deposit amount is ₦5');
       return;
     }
-    
+
     if (numAmount > 10000) {
       setError('Maximum deposit amount is ₦10,000');
       return;
     }
-    
+
     try {
       setIsProcessing(true);
-      
+
       // Call the deposit API
       const response = await fetch('/api/wallet/deposit', {
         method: 'POST',
@@ -92,16 +91,16 @@ export default function DepositPage() {
           name: session?.user?.name || 'FPL Player',
         }),
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.error || 'Failed to process deposit');
       }
-      
+
       // Redirect to Paystack payment page
       window.location.href = data.paymentUrl;
-      
+
     } catch (error: any) {
       console.error('Error processing deposit:', error);
       setError(error.message || 'Failed to process your deposit. Please try again.');
@@ -123,7 +122,7 @@ export default function DepositPage() {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="container mx-auto py-12 px-4 max-w-md">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
@@ -136,8 +135,8 @@ export default function DepositPage() {
             </Button>
           </Link>
         </motion.div>
-        
-        <motion.h1 
+
+        <motion.h1
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.1 }}
@@ -145,7 +144,7 @@ export default function DepositPage() {
         >
           Add Funds
         </motion.h1>
-        
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -153,7 +152,7 @@ export default function DepositPage() {
         >
           <Card className="bg-gray-900 border border-gray-800 overflow-hidden backdrop-blur-sm relative">
             <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/10 to-purple-900/10 rounded-xl pointer-events-none"></div>
-            
+
             <CardHeader className="relative z-10 border-b border-gray-800">
               <CardTitle className="text-gray-100 flex items-center">
                 <Wallet className="h-5 w-5 mr-2 text-indigo-400" />
@@ -163,7 +162,7 @@ export default function DepositPage() {
                 Add funds to your wallet to join leagues and contests
               </CardDescription>
             </CardHeader>
-            
+
             <form onSubmit={handleSubmit}>
               <CardContent className="space-y-6 pt-6 relative z-10">
                 <div className="space-y-2">
@@ -180,7 +179,7 @@ export default function DepositPage() {
                     />
                   </div>
                   {error && (
-                    <motion.p 
+                    <motion.p
                       initial={{ opacity: 0, y: -5 }}
                       animate={{ opacity: 1, y: 0 }}
                       className="text-sm text-red-400"
@@ -189,12 +188,12 @@ export default function DepositPage() {
                     </motion.p>
                   )}
                 </div>
-                
+
                 <div>
                   <Label className="mb-2 block text-gray-300">Quick select</Label>
                   <div className="grid grid-cols-4 gap-2">
                     {quickAmounts.map((quickAmount) => (
-                      <motion.div 
+                      <motion.div
                         key={quickAmount}
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
@@ -211,7 +210,7 @@ export default function DepositPage() {
                     ))}
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label className="text-gray-300">Payment Method</Label>
                   <div className="border border-gray-700 rounded-md p-4 flex items-center justify-between bg-gray-800/50 backdrop-blur-sm">
@@ -228,15 +227,15 @@ export default function DepositPage() {
                   </p>
                 </div>
               </CardContent>
-              
+
               <CardFooter className="relative z-10 pt-2 pb-6 border-t border-gray-800">
-                <motion.div 
+                <motion.div
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   className="w-full"
                 >
-                  <Button 
-                    type="submit" 
+                  <Button
+                    type="submit"
                     className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 border-0"
                     disabled={isProcessing || !amount}
                   >

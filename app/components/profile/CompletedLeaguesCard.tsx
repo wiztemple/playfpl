@@ -6,7 +6,7 @@ import {
     CardHeader,
     CardTitle
 } from '@/app/components/ui/card';
-import { Trophy, DollarSign, Clock, ChevronRight } from 'lucide-react';
+import { Trophy, Clock, ChevronRight, Banknote } from 'lucide-react';
 import { UserLeague } from '@/app/types';
 
 
@@ -45,7 +45,7 @@ export const CompletedLeaguesCard = ({ completedLeagues, formatCurrency, formatD
                                             GW {league.gameweek}
                                         </div>
                                         <div className="flex items-center text-sm text-gray-400">
-                                            <DollarSign className="h-3.5 w-3.5 mr-1 text-emerald-400" />
+                                            <Banknote className="h-3.5 w-3.5 mr-1 text-emerald-400" />
                                             {formatCurrency(league.entryFee)}
                                         </div>
                                         <div className="flex items-center text-sm text-gray-400">

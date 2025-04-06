@@ -10,7 +10,8 @@ import {
     Clock,
     Star,
     Zap,
-    DollarSign,
+    CurrencyIcon,
+    Banknote,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
@@ -171,10 +172,10 @@ export default function MyLeagueCard({ league }: MyLeagueCardProps) {
                 <div className="absolute inset-0 bg-gradient-to-br from-gray-800/80 to-gray-900/90 rounded-xl pointer-events-none"></div>
                 <div className={cn("absolute -right-20 -top-20 w-40 h-40 rounded-full blur-3xl opacity-50", statusConfig.bgGlow)}></div>
                 <div className={cn("absolute -left-20 -bottom-20 w-40 h-40 rounded-full blur-3xl opacity-40", statusConfig.bgGlow)}></div>
-                
+
                 {/* Add subtle pattern overlay with increased opacity */}
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[length:20px_20px] pointer-events-none opacity-40"></div>
-                
+
                 {/* Card hologram effect with increased brightness */}
                 <div className={cn("absolute top-5 left-5 w-8 h-8 rounded-full opacity-80 blur-sm bg-gradient-to-r", statusConfig.gradient)}></div>
                 <div className={cn("absolute top-5 left-5 w-6 h-6 rounded-full opacity-90 bg-gradient-to-r", statusConfig.gradient)}></div>
@@ -206,20 +207,20 @@ export default function MyLeagueCard({ league }: MyLeagueCardProps) {
                     <div className="flex justify-between items-center mb-4">
                         <div className="bg-gradient-to-br from-gray-800/70 to-gray-800/60 backdrop-blur-sm rounded-lg px-3 py-2 flex-1 mr-2 border border-gray-700/40 shadow-sm">
                             <p className="text-xs text-gray-300 flex items-center">
-                                <DollarSign className="h-3 w-3 mr-1 text-green-400" />
+                                <CurrencyIcon className="h-3 w-3 mr-1 text-green-400" />
                                 Prize Pool
                             </p>
                             <p className="text-md font-semibold text-green-400">{formatCurrency(prizePool)}</p>
                         </div>
                         <div className="bg-gradient-to-br from-gray-800/70 to-gray-800/60 backdrop-blur-sm rounded-lg px-3 py-2 flex-1 border border-gray-700/40 shadow-sm">
                             <p className="text-xs text-gray-300 flex items-center">
-                                <DollarSign className="h-3 w-3 mr-1 text-purple-400" />
+                                <Banknote className="h-3 w-3 mr-1 text-purple-400" />
                                 Entry Fee
                             </p>
                             <p className="text-md font-semibold text-purple-400">{formatCurrency(league.entryFee)}</p>
                         </div>
                     </div>
-                    
+
                     {/* Rest of the component remains the same */}
 
                     {/* Gameweek & Participants with enhanced styling */}
@@ -273,7 +274,7 @@ export default function MyLeagueCard({ league }: MyLeagueCardProps) {
                             </span>
                             {league.myResults && league.myResults.winnings > 0 && (
                                 <span className="ml-2 text-green-400 font-semibold flex items-center">
-                                    <DollarSign className="h-3 w-3 mr-0.5" />
+                                    <Banknote className="h-3 w-3 mr-0.5" />
                                     {formatCurrency(league.myResults.winnings)}
                                 </span>
                             )}

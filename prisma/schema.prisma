@@ -96,22 +96,17 @@ model LeagueEntry {
   id            String       @id @default(cuid())
   userId        String
   leagueId      String
-  fplTeamId     Int          // FPL team ID for this entry
+  fplTeamId     Int
   joinedAt      DateTime     @default(now())
   paid          Boolean      @default(false)
-  paymentId     String?      // Reference to payment if applicable
-  
-  // Points tracking - renamed for clarity
-  startPoints   Int?         // Points the team had when joining (renamed from pointsAtStart)
-  weeklyPoints  Int?         // Points earned in the current gameweek
-  finalPoints   Int?         // Total points (starting + weekly)
-  
-  // Ranking and payout
-  rank          Int?         // Final position in the league
+  paymentId     String?
+  pointsAtStart Int?
+  finalPoints   Int?
+  weeklyPoints  Int?
+  rank          Int?
   winnings      Float        @default(0)
-  payoutStatus  String?      // Status of prize payout
-  
-  // Relations
+  payoutStatus  String?
+  updatedAt     DateTime     @default(now())
   league        WeeklyLeague @relation(fields: [leagueId], references: [id], onDelete: Cascade)
   user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 

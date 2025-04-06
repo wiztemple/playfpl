@@ -1,8 +1,7 @@
 // /app/components/join-league/PaymentDetails.tsx
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Sparkles, DollarSign, CreditCard, Clock, ArrowRight } from "lucide-react";
+import { Sparkles, CreditCard, Clock } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { CardFooter } from "@/app/components/ui/card";
 import { useInitiatePayment } from "@/app/hooks/wallet";

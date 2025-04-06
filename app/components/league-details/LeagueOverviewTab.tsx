@@ -11,11 +11,11 @@ import {
 import {
   Calendar,
   Clock,
-  DollarSign,
   Users,
   Trophy,
   Shield,
   Info,
+  Banknote,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import PrizePoolCard from "./PrizePoolCard";
@@ -54,7 +54,7 @@ export default function LeagueOverviewTab({
               {[
                 { icon: <Calendar className="h-5 w-5 mr-3 text-indigo-400" />, label: "Gameweek", value: league.gameweek },
                 { icon: <Clock className="h-5 w-5 mr-3 text-purple-400" />, label: "Status", value: league.status, capitalize: true },
-                { icon: <DollarSign className="h-5 w-5 mr-3 text-pink-400" />, label: "Entry Fee", value: formatCurrency(league.entryFee) },
+                { icon: <Banknote className="h-5 w-5 mr-3 text-pink-400" />, label: "Entry Fee", value: formatCurrency(league.entryFee) },
                 { icon: <Users className="h-5 w-5 mr-3 text-cyan-400" />, label: "Participants", value: `${league.currentParticipants}/${league.maxParticipants}` },
                 { icon: <Calendar className="h-5 w-5 mr-3 text-emerald-400" />, label: "Start Date", value: formatDate(league.startDate) },
                 { icon: <Calendar className="h-5 w-5 mr-3 text-amber-400" />, label: "End Date", value: formatDate(league.endDate) },
@@ -92,8 +92,8 @@ export default function LeagueOverviewTab({
 
               {league.status === "upcoming" && (
                 <JoinWarning
-                  isJoinDisabled={isJoinDisabled} 
-                  minutesUntilFirstKickoff={minutesUntilFirstKickoff} 
+                  isJoinDisabled={isJoinDisabled}
+                  minutesUntilFirstKickoff={minutesUntilFirstKickoff}
                 />
               )}
             </div>
@@ -102,16 +102,16 @@ export default function LeagueOverviewTab({
       </div>
 
       <PrizePoolCard
-        league={league} 
-        prizePool={prizePool} 
+        league={league}
+        prizePool={prizePool}
         isJoinDisabled={isJoinDisabled}
         minutesUntilFirstKickoff={minutesUntilFirstKickoff}
-        handleJoinLeague={() => {}}  // This will be passed from parent
+        handleJoinLeague={() => { }}  // This will be passed from parent
       />
 
       <LeaderboardCard
-        league={league} 
-        leaderboard={leaderboard} 
+        league={league}
+        leaderboard={leaderboard}
       />
     </div>
   );

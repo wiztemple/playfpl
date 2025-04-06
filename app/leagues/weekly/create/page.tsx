@@ -20,6 +20,22 @@ import { formatCurrency, getPositionSuffix } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { motion } from "framer-motion";
 
+interface GameweekData {
+  id: number;
+  name: string;
+  deadline_time: string;
+  is_current: boolean;
+  is_next: boolean;
+  finished: boolean;
+}
+
+interface GameweekInfo {
+  current: GameweekData | null;
+  next: GameweekData | null;
+  loading: boolean;
+  error: string | null;
+}
+
 export default function CreateLeaguePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -28,11 +44,18 @@ export default function CreateLeaguePage() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [adminChecking, setAdminChecking] = useState(true);
 
+  const [gameweekInfo, setGameweekInfo] = useState<GameweekInfo>({
+    current: null,
+    next: null,
+    loading: true,
+    error: null
+  });
+
   // Update form state
   const [formData, setFormData] = useState({
     name: "",
-    gameweek: 30,
-    entryFee: 10,
+    gameweek: 1,
+    entryFee: 200,
     maxParticipants: 100,
     startDate: "",
     leagueType: "tri" as "tri" | "duo" | "jackpot",
@@ -42,6 +65,52 @@ export default function CreateLeaguePage() {
       { position: 3, percentageShare: 20 },
     ],
   });
+
+  // Fetch current gameweek when component mounts
+  useEffect(() => {
+    // Fetch current and next gameweek info
+    const fetchGameweekInfo = async () => {
+      try {
+        const response = await fetch("/api/gameweek/info");
+        if (response.ok) {
+          const data = await response.json();
+
+          setGameweekInfo({
+            current: data.current,
+            next: data.next,
+            loading: false,
+            error: null
+          });
+
+          // Set the form's gameweek to the next upcoming gameweek
+          // (or current if there's no next one yet)
+          const recommendedGameweek = data.next?.id || data.current?.id || 1;
+
+          setFormData(prev => ({
+            ...prev,
+            gameweek: recommendedGameweek
+          }));
+        }
+      } catch (error) {
+        console.error("Error fetching gameweek info:", error);
+        setGameweekInfo(prev => ({
+          ...prev,
+          loading: false,
+          error: "Failed to load gameweek information"
+        }));
+      }
+    };
+
+    // Set default date and fetch gameweek
+    const now = new Date();
+    setFormData((prev) => ({
+      ...prev,
+      startDate: now.toISOString().slice(0, 16), // Format: YYYY-MM-DDTHH:MM
+    }));
+
+    fetchGameweekInfo();
+  }, []);
+
 
   // Add handler for league type change
   const handleLeagueTypeChange = (value: "tri" | "duo" | "jackpot") => {
@@ -206,6 +275,14 @@ export default function CreateLeaguePage() {
     if (!formData.maxParticipants)
       errors.maxParticipants = "Max participants is required";
     if (!formData.startDate) errors.startDate = "Start date is required";
+
+    // Gameweek validation
+    if (!formData.gameweek) {
+      errors.gameweek = "Gameweek is required";
+    } else if (gameweekInfo.current && formData.gameweek < gameweekInfo.current.id) {
+      errors.gameweek = `Cannot create a league for past gameweek ${formData.gameweek}`;
+    }
+
 
     // Prize distribution validation based on league type
     const expectedPositions = formData.leagueType === 'tri' ? 3
@@ -458,7 +535,7 @@ export default function CreateLeaguePage() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.4, delay: 0.3 }}
                 >
-                  <div className="space-y-2">
+                  {/* <div className="space-y-2">
                     <Label htmlFor="gameweek" className="text-gray-300">Gameweek</Label>
                     <div className="relative">
                       <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-indigo-400" />
@@ -476,6 +553,71 @@ export default function CreateLeaguePage() {
                     {validation.gameweek && (
                       <p className="text-sm text-red-400">{validation.gameweek}</p>
                     )}
+                  </div> */}
+                  <div className="space-y-2">
+                    <Label htmlFor="gameweek" className="text-gray-300">Gameweek</Label>
+                    <div className="relative">
+                      <Select
+                        value={String(formData.gameweek)}
+                        onValueChange={(value) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            gameweek: parseInt(value)
+                          }));
+                          // Clear validation error for this field if any
+                          if (validation.gameweek) {
+                            setValidation(prev => {
+                              const newValidation = { ...prev };
+                              delete newValidation.gameweek;
+                              return newValidation;
+                            });
+                          }
+                        }}
+                        disabled={gameweekInfo.loading}
+                      >
+                        <SelectTrigger
+                          className={`w-full pl-10 bg-gray-800/50 border-gray-700 text-gray-200 focus:border-indigo-600 focus:ring-indigo-600/20 ${validation.gameweek ? "border-red-700 focus:border-red-700" : ""}`}
+                        >
+                          <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-indigo-400" />
+                          <SelectValue placeholder="Select gameweek" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-gray-800 border-gray-700 text-gray-200">
+                          {gameweekInfo.loading ? (
+                            <SelectItem value="loading" disabled>Loading gameweeks...</SelectItem>
+                          ) : (
+                            // Only show current and future gameweeks
+                            Array.from({ length: 38 }, (_, i) => i + 1)
+                              .filter(gw => {
+                                // Filter out past gameweeks
+                                const currentGw = gameweekInfo.current?.id || 1;
+                                return gw >= currentGw;
+                              })
+                              .map(gw => (
+                                <SelectItem key={gw} value={String(gw)}>
+                                  {`Gameweek ${gw}`}
+                                  {gw === gameweekInfo.current?.id && " (Current)"}
+                                  {gw === gameweekInfo.next?.id && " (Next)"}
+                                </SelectItem>
+                              ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {validation.gameweek && (
+                      <p className="text-sm text-red-400">{validation.gameweek}</p>
+                    )}
+
+                    {/* Informational note */}
+                    <div className="text-xs text-indigo-300 flex items-start mt-1">
+                      <Info className="h-3 w-3 mr-1 mt-0.5 flex-shrink-0" />
+                      <span>
+                        {gameweekInfo.next
+                          ? `Next gameweek (${gameweekInfo.next.id}) starts ${new Date(gameweekInfo.next.deadline_time).toLocaleDateString()}`
+                          : gameweekInfo.current
+                            ? `Current gameweek is ${gameweekInfo.current.id}`
+                            : ""}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="space-y-2">

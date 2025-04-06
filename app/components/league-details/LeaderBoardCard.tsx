@@ -21,7 +21,7 @@ interface LeaderboardCardProps {
 export default function LeaderboardCard({
     league,
     leaderboard: initialLeaderboard,
-    refreshInterval = 60000 // Default to 1 minute refresh
+    refreshInterval = 600000 // Default to 1 minute refresh
 }: LeaderboardCardProps) {
     const [leaderboard, setLeaderboard] = useState(initialLeaderboard);
     const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
@@ -29,19 +29,32 @@ export default function LeaderboardCard({
     const [autoRefresh, setAutoRefresh] = useState<boolean>(league.status === 'active');
 
     // Make sure leaderboard is populated on first render
+    // useEffect(() => {
+    //     // Only fetch if we don't already have data
+    //     if (!initialLeaderboard || initialLeaderboard.length === 0) {
+    //         refreshLeaderboard();
+    //     }
+
+    //     // Set up interval refresh regardless of league status
+    //     const interval = setInterval(() => {
+    //         refreshLeaderboard();
+    //     }, refreshInterval);
+
+    //     return () => clearInterval(interval);
+    // }, [refreshInterval]);
     useEffect(() => {
         // Only fetch if we don't already have data
         if (!initialLeaderboard || initialLeaderboard.length === 0) {
             refreshLeaderboard();
         }
-
-        // Set up interval refresh regardless of league status
+    
+        // Use different intervals based on league status
         const interval = setInterval(() => {
             refreshLeaderboard();
-        }, refreshInterval);
-
+        }, league.status === 'active' ? refreshInterval : 900000); // 1 min for active, 5 mins for others
+    
         return () => clearInterval(interval);
-    }, [refreshInterval]);
+    }, [refreshInterval, league.status]);
 
     // Ensure we're using initialLeaderboard data from props
     useEffect(() => {

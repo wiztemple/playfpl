@@ -12,11 +12,11 @@ import {
     ArrowDownLeft,
     ArrowUpRight,
     Trophy,
-    DollarSign,
     CreditCard,
     CheckCircle2,
     Clock,
-    XCircle
+    XCircle,
+    Banknote
 } from 'lucide-react';
 
 interface Transaction {
@@ -100,7 +100,7 @@ export const TransactionsCard = ({
                                         {transaction.type === 'deposit' && <ArrowDownLeft className="h-5 w-5" />}
                                         {transaction.type === 'withdrawal' && <ArrowUpRight className="h-5 w-5" />}
                                         {transaction.type === 'entry_fee' && <Trophy className="h-5 w-5" />}
-                                        {transaction.type === 'winnings' && <DollarSign className="h-5 w-5" />}
+                                        {transaction.type === 'winnings' && <Banknote className="h-5 w-5" />}
                                         {!['deposit', 'withdrawal', 'entry_fee', 'winnings'].includes(transaction.type) && <CreditCard className="h-5 w-5" />}
                                     </div>
                                     <div>

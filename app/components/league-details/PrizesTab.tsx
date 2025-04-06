@@ -7,7 +7,6 @@ import {
 } from "@/app/components/ui/card";
 import {
     Trophy,
-    DollarSign,
     CheckCircle,
     ArrowRight
 } from "lucide-react";
@@ -71,9 +70,9 @@ export default function PrizesTab({
                                     >
                                         <div className="flex items-center">
                                             <div className={`p-3 rounded-full mr-4 ${prize.position === 1 ? "bg-yellow-900/30 text-yellow-500" :
-                                                    prize.position === 2 ? "bg-gray-700/30 text-gray-400" :
-                                                        prize.position === 3 ? "bg-amber-900/30 text-amber-700" :
-                                                            "bg-gray-800/30 text-gray-500"
+                                                prize.position === 2 ? "bg-gray-700/30 text-gray-400" :
+                                                    prize.position === 3 ? "bg-amber-900/30 text-amber-700" :
+                                                        "bg-gray-800/30 text-gray-500"
                                                 }`}>
                                                 <Trophy className="h-6 w-6" />
                                             </div>
@@ -125,8 +124,8 @@ export default function PrizesTab({
                             >
                                 <Button
                                     className={`w-full text-white bg-gradient-to-r ${isJoinDisabled
-                                            ? "from-gray-500 to-gray-600 cursor-not-allowed opacity-70"
-                                            : "from-orange-500 to-red-500 hover:from-indigo-600 hover:to-purple-600"
+                                        ? "from-gray-500 to-gray-600 cursor-not-allowed opacity-70"
+                                        : "from-orange-500 to-red-500 hover:from-indigo-600 hover:to-purple-600"
                                         } border-0 shadow-lg py-6`}
                                     onClick={handleJoinLeague}
                                     size="lg"

@@ -1,6 +1,6 @@
 // /app/components/join-league/JoinLeagueHeader.tsx
 import { ReactNode } from "react";
-import { AlertTriangle, Calendar, DollarSign } from "lucide-react";
+import { AlertTriangle, Calendar } from "lucide-react";
 import { motion } from "framer-motion";
 import {
   Card,
@@ -8,7 +8,6 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
-  CardFooter,
 } from "@/app/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 
@@ -22,9 +21,7 @@ interface JoinLeagueHeaderProps {
 
 export default function JoinLeagueHeader({
   league,
-  step,
   error,
-  minutesUntilFirstKickoff,
   children
 }: JoinLeagueHeaderProps) {
   return (
@@ -42,7 +39,6 @@ export default function JoinLeagueHeader({
           </CardTitle>
           <CardDescription className="text-gray-400 flex items-center gap-3">
             <div className="flex items-center">
-              <DollarSign className="h-4 w-4 mr-1 text-green-400" />
               <span>{formatCurrency(league.entryFee)}</span>
             </div>
             <div className="flex items-center">
@@ -63,7 +59,7 @@ export default function JoinLeagueHeader({
               <p>{error}</p>
             </motion.div>
           )}
-          
+
           {children}
         </CardContent>
       </Card>
