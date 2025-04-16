@@ -12,7 +12,6 @@ import {
     useWalletData,
     useUpdateProfile
 } from '@/app/hooks/user';
-import { useMyLeagues } from '@/app/hooks/useMyLeagues';
 
 import { BackgroundGradients } from '../components/shared/BackgroundGradient';
 import { UserProfileCard } from '../components/profile/UserProfileCard';
@@ -24,6 +23,9 @@ import { CompletedLeaguesCard } from '../components/profile/CompletedLeaguesCard
 import { TransactionsCard } from '../components/profile/TransactionCard';
 import { AccountSettingsCard } from '../components/profile/AccountSettingsCard';
 import { useVerifyFplTeam } from '../hooks/fpl';
+import { formatDate } from '@/lib/utils';
+import { TeamInfo } from '../types';
+import { useMyLeagues } from '../hooks/leagues';
 
 export default function ProfilePage() {
     const { data: session, status } = useSession();
@@ -31,7 +33,7 @@ export default function ProfilePage() {
 
     // State for FPL team verification
     const [fplTeamId, setFplTeamId] = useState('');
-    const [teamInfo, setTeamInfo] = useState<any>(null);
+    const [teamInfo, setTeamInfo] = useState<TeamInfo | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     // Use React Query hooks
@@ -51,11 +53,11 @@ export default function ProfilePage() {
         isLoading: walletLoading
     } = useWalletData();
 
-    const { 
-        activeLeagues, 
-        completedLeagues, 
-        isLoading: leaguesLoading, 
-        error: leaguesError 
+    const {
+        activeLeagues,
+        completedLeagues,
+        isLoading: leaguesLoading,
+        error: leaguesError
     } = useMyLeagues();
 
     // Mutations
@@ -82,7 +84,13 @@ export default function ProfilePage() {
                         setTeamInfo({
                             teamName: data.teamName,
                             managerName: data.managerName,
-                            overallRank: data.overallRank
+                            overallRank: data.overallRank,
+                            totalPoints: data.totalPoints,       // Add this
+                            teamValue: data.teamValue,         // Add this
+                            currentGameweek: data.currentGameweek, // Add this
+                            gameweekPoints: data.gameweekPoints,   // Add this
+                            transfersMade: data.transfersMade,     // Add this
+                            transfersAvailable: data.transfersAvailable, // Add this (will likely be null)
                         });
                     }
                 })
@@ -146,14 +154,6 @@ export default function ProfilePage() {
         }).format(amount);
     };
 
-    const formatDate = (date: string) => {
-        return new Date(date).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-        });
-    };
-
     // Get user initials for avatar fallback
     const userInitials = session.user.name
         ? session.user.name
@@ -166,26 +166,22 @@ export default function ProfilePage() {
     // Recent transactions
     const recentTransactions = walletData?.transactions?.slice(0, 5) || [];
 
-    // Get active and completed leagues
-    // const activeLeagues = leagues.filter((l) => l.status === 'active');
-    // const completedLeagues = leagues.filter((l) => l.status === 'completed').slice(0, 3);
-
     return (
         <div className="min-h-screen bg-gray-950 relative overflow-hidden">
             <BackgroundGradients />
 
             <div className="container mx-auto py-6 max-w-4xl relative z-10">
                 <h1 className="text-2xl font-bold mb-6 bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">My Profile</h1>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <UserProfileCard 
-                        session={session} 
-                        userInitials={userInitials} 
-                        userProfile={userProfile} 
-                        walletData={walletData} 
-                        formatDate={formatDate} 
-                        formatCurrency={formatCurrency} 
-                        router={router} 
+                    <UserProfileCard
+                        session={session}
+                        userInitials={userInitials}
+                        userProfile={userProfile}
+                        walletData={walletData}
+                        formatDate={formatDate}
+                        formatCurrency={formatCurrency}
+                        router={router}
                     />
 
                     <StatsOverviewCard stats={stats} formatCurrency={formatCurrency} />
@@ -200,7 +196,7 @@ export default function ProfilePage() {
                     </TabsList>
 
                     <TabsContent value="fpl" className="space-y-4">
-                        <FplTeamCard 
+                        <FplTeamCard
                             fplTeamId={fplTeamId}
                             setFplTeamId={setFplTeamId}
                             verifyFplTeam={verifyFplTeam}
@@ -211,7 +207,7 @@ export default function ProfilePage() {
                             updateProfileMutation={updateProfileMutation}
                             userProfile={userProfile}
                         />
-                        
+
                         <FplPerformanceCard
                             userProfile={userProfile}
                             teamInfo={teamInfo}
@@ -220,20 +216,20 @@ export default function ProfilePage() {
 
                     <TabsContent value="leagues" className="space-y-4">
                         <ActiveLeaguesCard
-                            activeLeagues={activeLeagues}
+                            activeLeagues={activeLeagues || []}
                             formatCurrency={formatCurrency}
                             formatDate={formatDate}
                         />
-                        
+
                         <CompletedLeaguesCard
-                            completedLeagues={completedLeagues}
+                            completedLeagues={completedLeagues || []}
                             formatCurrency={formatCurrency}
                             formatDate={formatDate}
                         />
                     </TabsContent>
 
                     <TabsContent value="transactions" className="space-y-4">
-                        <TransactionsCard 
+                        <TransactionsCard
                             walletData={walletData}
                             recentTransactions={recentTransactions}
                             formatCurrency={formatCurrency}
@@ -242,7 +238,7 @@ export default function ProfilePage() {
                     </TabsContent>
 
                     <TabsContent value="account" className="space-y-4">
-                        <AccountSettingsCard 
+                        <AccountSettingsCard
                             session={session}
                             userProfile={userProfile}
                         />

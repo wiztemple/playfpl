@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/ta
 import LeagueList from "@/app/components/leagues/LeagueList";
 import Loading from "@/app/components/shared/Loading";
 import { motion } from "framer-motion";
-import CreateLeagueButton from "@/app/components/CreateLeagueButton";
+// import CreateLeagueButton from "@/app/components/CreateLeagueButton";
 import GameWeekSelector from "@/app/components/leagues/GameWeekSelector";
 import { useSearchParams } from "next/navigation";
 
@@ -29,7 +29,7 @@ export default function WeeklyLeaguesPage() {
           </h1>
           <div className="flex items-center gap-3">
             <GameWeekSelector />
-            <CreateLeagueButton />
+            {/* <CreateLeagueButton /> */}
           </div>
         </motion.div>
         <motion.div
@@ -48,12 +48,12 @@ export default function WeeklyLeaguesPage() {
               >
                 Available Leagues
               </TabsTrigger>
-              <TabsTrigger
+              {/* <TabsTrigger
                 value="my-leagues"
                 className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=inactive]:text-gray-400"
               >
                 My Leagues
-              </TabsTrigger>
+              </TabsTrigger> */}
             </TabsList>
 
             <TabsContent value="available">
@@ -62,11 +62,11 @@ export default function WeeklyLeaguesPage() {
                   <Loading className="text-indigo-400" />
                 </div>
               }>
-                <LeagueList filter="available" gameweek={gameweek} />
+                <LeagueList gameweek={gameweek} />
               </Suspense>
             </TabsContent>
 
-            <TabsContent value="my-leagues">
+            {/* <TabsContent value="my-leagues">
               <Suspense fallback={
                 <div className="flex justify-center py-12">
                   <Loading className="text-indigo-400" />
@@ -74,7 +74,7 @@ export default function WeeklyLeaguesPage() {
               }>
                 <LeagueList filter="my-leagues" gameweek={gameweek} />
               </Suspense>
-            </TabsContent>
+            </TabsContent> */}
           </Tabs>
         </motion.div>
       </div>

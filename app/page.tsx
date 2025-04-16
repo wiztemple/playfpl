@@ -44,13 +44,24 @@ export default function HomePage() {
           <div className="flex flex-wrap gap-4 justify-center">
             {session ? (
               <Link href="/leagues/weekly">
-                <Button size="lg" className="font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white border-0 shadow-lg shadow-indigo-600/20">
+                {/* Updated Button Styling with the correct gradient */}
+                <Button 
+                  size="lg" 
+                  className="font-semibold text-white 
+                             bg-gradient-to-r from-[#E83676] to-[#BE0A55] {/* Correct Gradient */}
+                             bg-opacity-80 backdrop-blur-sm 
+                             border border-white/10 
+                             shadow-lg shadow-[#BE0A55]/30 {/* Adjusted shadow color */}
+                             hover:bg-opacity-100 hover:shadow-xl hover:shadow-[#BE0A55]/40 {/* Adjusted hover shadow */}
+                             transition-all duration-300"
+                >
                   Browse Leagues
                   <ChevronRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
             ) : (
               <Link href="/api/auth/signin">
+                {/* Unchanged Sign In Button */}
                 <Button size="lg" className="font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white border-0 shadow-lg shadow-indigo-600/20">
                   Get Started
                   <ChevronRight className="ml-2 h-4 w-4" />

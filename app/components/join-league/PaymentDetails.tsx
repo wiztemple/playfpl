@@ -1,179 +1,149 @@
-// /app/components/join-league/PaymentDetails.tsx
-import { useState } from "react";
-import { motion } from "framer-motion";
-import { Sparkles, CreditCard, Clock } from "lucide-react";
-import { Button } from "@/app/components/ui/button";
-import { CardFooter } from "@/app/components/ui/card";
-import { useInitiatePayment } from "@/app/hooks/wallet";
-import { formatCurrency } from "@/lib/utils";
+'use client';
 
+import { motion } from "framer-motion";
+import { Sparkles, Wallet as WalletIcon, Loader2, AlertTriangle, Clock } from "lucide-react";
+import { Button } from "@/app/components/ui/button";
+import { CardFooter } from "@/app/components/ui/card"; // Only CardFooter needed maybe
+import { useJoinLeagueWithWallet } from "@/app/hooks/leagues"; // Import the correct hook (adjust path if needed)
+import { formatCurrency } from "@/lib/utils";
+import type { League } from "@/app/types"; // Use consistent types
+import { UserProfile } from "@/app/types/wallet";
+
+// Define the props expected by this component
 interface PaymentDetailsProps {
-    league: any;
-    teamInfo: any;
-    fplTeamId: string;
-    leagueId: string;
-    session: any;
+    // Use Pick to only require specific fields from the League type
+    league: Pick<League, 'id' | 'name' | 'gameweek' | 'entryFee'>;
+    // Expect only the fplTeamId part of the UserProfile, can be null/undefined
+    userProfile: Pick<UserProfile, 'fplTeamId'> | null | undefined;
+    leagueId: string; // Expecting string, parent JoinLeaguePage ensures it's valid before rendering
     isJoinDisabled: boolean;
     minutesUntilFirstKickoff: number | null;
     setError: (error: string | null) => void;
     onBack: () => void;
-    router: any;
+    onJoinSuccess?: (data: any) => void; // Optional: type the data argument more specifically if needed
 }
+
 
 export default function PaymentDetails({
     league,
-    teamInfo,
-    fplTeamId,
+    userProfile, // Use the userProfile prop
     leagueId,
-    session,
     isJoinDisabled,
     minutesUntilFirstKickoff,
     setError,
     onBack,
-    router
+    onJoinSuccess
 }: PaymentDetailsProps) {
-    const [submitting, setSubmitting] = useState(false);
-    const initiatePaymentMutation = useInitiatePayment();
 
-    const initiatePayment = async () => {
-        try {
-            // Final check for joinability before payment
-            if (isJoinDisabled) {
-                setError("Sorry, joining is no longer available as the first match is about to start.");
-                router.push(`/leagues/weekly/${leagueId}`);
-                return;
-            }
+    // Use the mutation hook for joining via wallet
+    const joinLeagueMutation = useJoinLeagueWithWallet(onJoinSuccess); // Pass success callback if needed
 
-            // Check if leagueId exists before proceeding
-            if (!leagueId) {
-                setError("League ID is missing. Please try again.");
-                return;
-            }
+    // Handler to call the join mutation
+    const handleJoin = async () => {
+        setError(null); // Clear previous errors
 
-            setSubmitting(true);
-            setError(null);
-
-            const paymentData = {
-                leagueId: leagueId,
-                fplTeamId,
-                amount: Math.round((league?.entryFee || 0) * 100), // Convert to kobo (smallest currency unit)
-                email: session?.user?.email || '',
-                name: session?.user?.name || 'FPL Player',
-                metadata: {
-                    league_name: league?.name || 'Unknown League',
-                    gameweek: league?.gameweek || 0,
-                    team_name: teamInfo?.teamName || `Team ${fplTeamId}`
-                }
-            };
-
-            const data = await initiatePaymentMutation.mutateAsync(paymentData);
-
-            // Redirect to Paystack payment page
-            window.location.href = data.authorization_url;
-        } catch (err: any) {
-            console.error("Payment initiation error:", err);
-            setError(err.message || "Failed to initiate payment. Please try again.");
-        } finally {
-            setSubmitting(false);
+        // Final validation checks
+        if (isJoinDisabled) {
+            setError("Sorry, joining is no longer available.");
+            return;
         }
+        if (!leagueId) {
+            setError("League ID is missing.");
+            return;
+        }
+
+        // Get FPL Team ID from the passed userProfile prop
+        const fplTeamId = userProfile?.fplTeamId;
+        if (!fplTeamId) {
+            setError("Your FPL Team ID is not linked or available. Please link it in your profile.");
+            return;
+        }
+
+        // Call the mutation with leagueId and string fplTeamId
+        joinLeagueMutation.mutate({ leagueId, fplTeamId: fplTeamId.toString() });
     };
+
+    // Calculate entry fee safely
+    let entryFeeNumber: number = 0;
+    const rawEntryFee = league?.entryFee; // Get the value which might be Decimal | number | null
+    if (rawEntryFee != null) {
+        if (typeof rawEntryFee === 'number') {
+            entryFeeNumber = rawEntryFee; // It's already a number
+        } else if (typeof (rawEntryFee as any)?.toNumber === 'function') {
+            entryFeeNumber = (rawEntryFee as any).toNumber(); // It's a Decimal object, convert it
+        } else {
+            // Try parsing if it's something else (like a string representation)
+            entryFeeNumber = parseFloat(String(rawEntryFee));
+        }
+    }
+    // Final check if conversion resulted in NaN
+    if (isNaN(entryFeeNumber)) {
+        entryFeeNumber = 0;
+    }
+    const displayFplTeamId = userProfile?.fplTeamId;
 
     return (
         <div className="space-y-6">
+            {/* Summary Confirmation Section */}
             <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 border border-gray-700 p-4 rounded-lg backdrop-blur-sm">
                 <h3 className="font-medium mb-3 text-gray-200 flex items-center">
                     <Sparkles className="h-4 w-4 mr-2 text-indigo-400" />
-                    League Details
+                    Confirm Entry
                 </h3>
-                <div className="space-y-3">
+                <div className="space-y-3 text-sm">
+                    {/* Display relevant details */}
                     <div className="flex justify-between items-center py-2 border-b border-gray-800">
                         <span className="text-gray-400">League:</span>
-                        <span className="font-medium text-gray-200">{league.name}</span>
+                        <span className="font-medium text-gray-200 text-right">{league?.name ?? 'N/A'}</span>
                     </div>
                     <div className="flex justify-between items-center py-2 border-b border-gray-800">
+                        <span className="text-gray-400">Gameweek:</span>
+                        <span className="font-medium text-gray-200">{league?.gameweek ?? 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-gray-800">
+                        <span className="text-gray-400">Your FPL Team ID:</span>
+                        <span className="font-medium text-gray-200">{displayFplTeamId ?? 'Not Linked'}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2">
                         <span className="text-gray-400">Entry Fee:</span>
-                        <span className="font-medium text-gray-200 bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
-                            {formatCurrency(league.entryFee)}
+                        <span className="font-semibold text-xl text-emerald-400">
+                        {formatCurrency(entryFeeNumber)}
                         </span>
                     </div>
-                    <div className="flex justify-between items-center py-2 border-b border-gray-800">
-                        <span className="text-gray-400">FPL Team:</span>
-                        <span className="font-medium text-gray-200">
-                            {teamInfo ? teamInfo.teamName : fplTeamId}
-                        </span>
-                    </div>
-                    {teamInfo && (
-                        <div className="flex justify-between items-center py-2 border-b border-gray-800">
-                            <span className="text-gray-400">Manager:</span>
-                            <span className="font-medium text-gray-200">{teamInfo.managerName}</span>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 border border-gray-700 p-4 rounded-lg backdrop-blur-sm">
-                <h3 className="font-medium mb-3 text-gray-200 flex items-center">
-                    <CreditCard className="h-4 w-4 mr-2 text-purple-400" />
-                    Payment Method
-                </h3>
-                <p className="text-sm text-gray-400 mb-4">
-                    Secure payment processing via Paystack. No actual payment will be processed in demo mode.
-                </p>
-                <div className="flex items-center space-x-2 bg-gray-800/50 p-3 rounded-md border border-gray-700">
-                    <input
-                        type="radio"
-                        id="creditCard"
-                        name="paymentMethod"
-                        checked
-                        readOnly
-                        className="text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <label htmlFor="creditCard" className="text-gray-300">Demo Credit Card</label>
-                </div>
-            </div>
-
-            {/* Time remaining warning in payment step */}
-            {minutesUntilFirstKickoff !== null && minutesUntilFirstKickoff < 30 && (
-                <motion.div
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="p-3 bg-amber-900/30 border border-amber-800/40 rounded-md flex items-start"
-                >
-                    <Clock className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5 text-amber-400" />
-                    <p className="text-sm text-amber-300">
-                        <span className="font-medium">Time-sensitive:</span>{" "}
-                        Complete payment quickly. First match starts in {minutesUntilFirstKickoff} minutes.
+                    <p className="text-xs text-gray-500 text-center pt-2">
+                        This amount will be deducted from your wallet balance upon joining.
                     </p>
+                </div>
+            </div>
+
+            {/* Warning Messages */}
+            {minutesUntilFirstKickoff !== null && minutesUntilFirstKickoff < 30 && !isJoinDisabled && (
+                <motion.div /* ... animation ... */ className="p-3 bg-amber-900/30 border border-amber-800/40 rounded-md flex items-start">
+                    <Clock className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5 text-amber-400" />
+                    <p className="text-sm text-amber-300"> <span className="font-medium">Time-sensitive:</span> Joining closes in {minutesUntilFirstKickoff} mins. </p>
+                </motion.div>
+            )}
+            {isJoinDisabled && (
+                <motion.div /* ... animation ... */ className="p-3 bg-red-900/30 border border-red-800/50 rounded-md flex items-start">
+                    <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5 text-red-400" />
+                    <p className="text-sm text-red-200"> Joining is currently closed for this league. </p>
                 </motion.div>
             )}
 
-            <CardFooter className="flex justify-between pt-6 pb-6 relative z-10 border-t border-gray-800">
+            {/* Footer with Actions */}
+            <CardFooter className="flex justify-between pt-6 pb-0 px-0">
                 <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                    <Button
-                        variant="outline"
-                        onClick={onBack}
-                        disabled={submitting || initiatePaymentMutation.isPending}
-                        className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-indigo-400 bg-transparent"
-                    >
-                        Back
-                    </Button>
+                    <Button type="button" variant="outline" onClick={onBack} disabled={joinLeagueMutation.isPending} className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-indigo-400 bg-transparent" > Back </Button>
                 </motion.div>
                 <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                     <Button
-                        onClick={initiatePayment}
-                        disabled={submitting || initiatePaymentMutation.isPending}
-                        className="text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 border-0"
+                        type="button" // Important: Not submit
+                        onClick={handleJoin}
+                        // Disable if mutation pending, if joining is generally disabled, or if FPL ID missing
+                        disabled={joinLeagueMutation.isPending || isJoinDisabled || !displayFplTeamId}
+                        className="text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 border-0 disabled:opacity-70 disabled:cursor-not-allowed"
                     >
-                        {submitting || initiatePaymentMutation.isPending ? (
-                            <div className="flex items-center">
-                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                                Processing...
-                            </div>
-                        ) : (
-                            <div className="flex items-center">
-                                Complete Payment
-                            </div>
-                        )}
+                        {joinLeagueMutation.isPending ? (<> <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Joining... </>) : (<> <WalletIcon className="h-4 w-4 mr-2" /> Join (Pay   {formatCurrency(entryFeeNumber)}) </>)}
                     </Button>
                 </motion.div>
             </CardFooter>

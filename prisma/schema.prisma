@@ -1,3 +1,5 @@
+// prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -16,15 +18,19 @@ model User {
   fplTeamId     Int?          @unique
   fplTeamName   String?
   createdAt     DateTime      @default(now())
-  updatedAt     DateTime
+  updatedAt     DateTime      @updatedAt // Correct
   password      String?
   username      String?
   isAdmin       Boolean       @default(false)
+
+  // Relations
   accounts      Account[]
   leagueEntries LeagueEntry[]
   sessions      Session[]
   transactions  Transaction[]
+  bankAccounts  UserBankAccount[]
   wallet        Wallet?
+  // No extra indexes typically needed on User besides unique fields
 }
 
 model Account {
@@ -33,16 +39,17 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String?
-  access_token      String?
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String?
+  id_token          String? @db.Text
   session_state     String?
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@index([userId]) // <<< ADDED index for querying by user
 }
 
 model Session {
@@ -51,6 +58,8 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId]) // <<< ADDED index for querying by user
 }
 
 model VerificationToken {
@@ -62,88 +71,133 @@ model VerificationToken {
 }
 
 model WeeklyLeague {
-  id                      String              @id @default(cuid())
+  id                      String        @id @default(cuid())
   name                    String
   gameweek                Int
-  entryFee                Float
+  entryFee                Decimal       @db.Decimal(12, 2)
   maxParticipants         Int
-  currentParticipants     Int                 @default(0)
-  status                  String              @default("upcoming")
+  currentParticipants     Int           @default(0)
+  status                  String        @default("upcoming")
   startDate               DateTime
   endDate                 DateTime
-  platformFeePercentage   Float               @default(10)
-  minParticipantsRequired Int                 @default(3)
-  tiebreaker              String              @default("goals_scored")
-  createdAt               DateTime            @default(now())
-  updatedAt               DateTime            @updatedAt
-  leagueType              String              @default("tri")
+  platformFeePercentage   Float         @default(10)
+  minParticipantsRequired Int           @default(3)
+  tiebreaker              String        @default("goals_scored")
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  leagueType              String        @default("tri")
   description             String?
+  currentHighestGwPoints  Int?
+
+  // Relations
   entries                 LeagueEntry[]
   prizeDistribution       PrizeDistribution[]
+
+  // Indexes
+  @@index([status, gameweek, createdAt]) // <<< ADDED index for filtering/sorting lists
 }
 
 model PrizeDistribution {
   id              String       @id @default(cuid())
   leagueId        String
   position        Int
-  percentageShare Float
+  percentageShare Decimal      @db.Decimal(5, 2)
   league          WeeklyLeague @relation(fields: [leagueId], references: [id], onDelete: Cascade)
 
   @@unique([leagueId, position])
+  @@index([leagueId]) // Index implied by relation+unique, but explicit is fine
 }
 
 model LeagueEntry {
-  id            String       @id @default(cuid())
+  id            String        @id @default(cuid())
   userId        String
   leagueId      String
   fplTeamId     Int
-  joinedAt      DateTime     @default(now())
-  paid          Boolean      @default(false)
+  joinedAt      DateTime      @default(now())
+  paid          Boolean       @default(false)
   paymentId     String?
   pointsAtStart Int?
   finalPoints   Int?
   weeklyPoints  Int?
   rank          Int?
-  winnings      Float        @default(0)
+  winnings      Decimal       @default(0) @db.Decimal(12, 2)
   payoutStatus  String?
-  updatedAt     DateTime     @default(now())
-  league        WeeklyLeague @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // FIX: Added default(now()) for adding column to existing rows
+  updatedAt     DateTime      @default(now()) @updatedAt
 
+  // Relations
+  league        WeeklyLeague  @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Constraints & Indexes
   @@unique([userId, leagueId])
+  @@index([userId])             // Existing
+  @@index([leagueId])           // Existing
+  @@index([leagueId, finalPoints]) // Keep for completed tiebreak/sort
+  @@index([leagueId, rank])      // Keep for completed sort
+  @@index([leagueId, weeklyPoints]) // <<< ADDED for active sort
+  @@index([leagueId, joinedAt])     // <<< ADDED for upcoming sort
 }
 
 model Wallet {
   id           String        @id @default(cuid())
   userId       String        @unique
-  balance      Float         @default(0)
-  currency     String        @default("USD")
+  balance      Decimal       @default(0) @db.Decimal(12, 2)
+  currency     String        @default("NGN")
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
+
+  // Relations
   transactions Transaction[]
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Index on userId implied by @unique
 }
 
 model Transaction {
-  id                String   @id @default(cuid())
+  id                String            @id @default(cuid())
   userId            String
   walletId          String
-  type              String
-  amount            Float
-  currency          String   @default("NGN")
-  status            String
+  amount            Decimal           @db.Decimal(12, 2)
+  currency          String            @default("NGN")
   externalReference String?
   description       String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
   metadata          Json?
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  wallet            Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  type              TransactionType   // Using Enum (Potential migration issue if data exists)
+  status            TransactionStatus @default(PENDING) // Using Enum (Potential migration issue if data exists)
 
-  @@index([userId])
-  @@index([walletId])
+  // Relations
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet            Wallet            @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([userId])             // Existing
+  @@index([walletId])           // Existing
+  @@index([status])             // Existing (Now on Enum)
+  @@index([type])               // Existing (Now on Enum)
+  @@index([userId, createdAt])  // <<< ADDED for user history
+  @@index([walletId, createdAt])// <<< ADDED for wallet history
 }
 
+model UserBankAccount {
+  id            String   @id @default(cuid())
+  userId        String
+  accountNumber String
+  accountName   String
+  bankName      String
+  bankCode      String?
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, accountNumber])
+  @@index([userId]) // Existing
+}
+
+// Cache models - fixed updatedAt
 model GameweekCache {
   id          String   @id @default(cuid())
   gameweekId  Int      @unique
@@ -151,7 +205,7 @@ model GameweekCache {
   startDate   DateTime
   endDate     DateTime
   fplData     Json?
-  lastUpdated DateTime @default(now())
+  lastUpdated DateTime @updatedAt // Corrected
 }
 
 model FplTeamCache {
@@ -159,5 +213,25 @@ model FplTeamCache {
   fplTeamId   Int      @unique
   teamName    String
   playerName  String?
-  lastUpdated DateTime @default(now())
+  lastUpdated DateTime @updatedAt // Corrected
+}
+
+// Enum definitions (kept as per this schema version)
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  ENTRY_FEE
+  WINNINGS_PAYOUT
+  REFUND
+  ADJUSTMENT_CREDIT
+  ADJUSTMENT_DEBIT
+}
+
+enum TransactionStatus {
+  PENDING
+  REQUIRES_APPROVAL
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
 }

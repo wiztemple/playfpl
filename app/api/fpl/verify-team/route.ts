@@ -1,69 +1,92 @@
-import { NextResponse } from "next/server";
 
-export async function GET(request: Request) {
+import { NextRequest, NextResponse } from "next/server";
+import { fetchBootstrapStatic, fetchFplEntry, fetchFplEntryHistory, fetchLiveGameweekPoints as fetchLiveGwPointsInternal } from "@/lib/fpl-api";
+
+async function fetchLiveGameweekPointsApi(teamIds: number[], gameweek: number): Promise<Record<number, number>> {
+  return await fetchLiveGwPointsInternal(teamIds, gameweek);
+}
+
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
+    const url = request.nextUrl;
+    const teamId = url.searchParams.get('teamId') || url.searchParams.get('id');
 
-    const teamId = searchParams.get('teamId') || searchParams.get('id');
+    if (!teamId || isNaN(Number(teamId))) {
+      return NextResponse.json({ valid: false, error: "Valid FPL Team ID required" }, { status: 400 });
+    }
+    const fplTeamId = Number(teamId);
+    console.log(`[VERIFY_FPL] Verifying team ID: ${fplTeamId}`);
 
-    if (!teamId) {
-      return NextResponse.json(
-        { error: "Team ID is required" },
-        { status: 400 }
-      );
+    // Fetch data concurrently
+    const [entryData, historyData, bootstrapData] = await Promise.all([
+      fetchFplEntry(fplTeamId),
+      fetchFplEntryHistory(fplTeamId),
+      fetchBootstrapStatic()
+    ]);
+
+    // 1. Validate basic entry data first
+    if (!entryData?.name || !entryData?.player_first_name) {
+      console.warn(`[VERIFY_FPL] Team ID ${fplTeamId} not found or invalid entry data.`);
+      return NextResponse.json({ valid: false, error: 'FPL Team ID not found or invalid.' }, { status: 404 });
     }
 
-    // Call the FPL API to verify the team exists
-    const response = await fetch(`${process.env.FPL_API_ENTRY_BASE_URL}${teamId}/`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36'
-      }
-    });
+    // 2. Extract details from fetched data
+    const currentGameweekEvent = bootstrapData?.events?.find((event: any) => event.is_current);
+    const currentGameweek = currentGameweekEvent?.id || null;
 
-    if (!response.ok) {
-      if (response.status === 404) {
-        return NextResponse.json(
-          { error: "FPL Team not found. Please check your Team ID." },
-          { status: 404 }
-        );
-      }
+    const latestHistoryEntry = historyData?.current?.slice(-1)[0];
+    const currentGwHistoryEntry = currentGameweek ? historyData?.current?.find((gw: any) => gw.event === currentGameweek) : null;
 
-      // Try to get more details about the error
-      let errorText = '';
+    const overallRank = currentGwHistoryEntry?.overall_rank ?? latestHistoryEntry?.overall_rank ?? null;
+    // Ensure totalPoints is taken from the absolute latest entry in history
+    const totalPoints = latestHistoryEntry?.total_points ?? 0;
+    const teamValue = latestHistoryEntry ? (latestHistoryEntry.value / 10).toFixed(1) : '0.0';
+    // Transfers made *in* the current gameweek
+    const transfersMade = currentGwHistoryEntry?.event_transfers ?? 0;
+
+    // 3. Get Gameweek points (prefer live, fallback to history)
+    let gameweekPoints = currentGwHistoryEntry?.points ?? 0; // Default to history
+    if (currentGameweek) {
       try {
-        errorText = await response.text();
-      } catch (e) {
-        errorText = 'Could not read error response';
+        const livePointsResult = await fetchLiveGameweekPointsApi([fplTeamId], currentGameweek);
+        if (livePointsResult[fplTeamId] !== undefined) {
+          // Use live points directly, might be lower than history if points were removed live
+          gameweekPoints = livePointsResult[fplTeamId];
+          console.log(`[VERIFY_FPL] Using live points (${gameweekPoints}) for team ${fplTeamId} GW ${currentGameweek}`);
+        } else {
+          console.log(`[VERIFY_FPL] No live points found for team ${fplTeamId}. Using history points (${gameweekPoints}) for GW ${currentGameweek}`);
+        }
+      } catch (liveFetchError) {
+        console.error(`[VERIFY_FPL] Error fetching live points for ${fplTeamId}:`, liveFetchError);
+        // Keep points from history if live fails
+        console.log(`[VERIFY_FPL] Using history points (${gameweekPoints}) due to live fetch error for team ${fplTeamId}.`);
       }
-
-      return NextResponse.json(
-        { error: "Invalid FPL Team ID. Please check and try again." },
-        { status: 400 }
-      );
     }
 
-    const data = await response.json();
+    // 4. Construct the response object
+    const responsePayload = {
+      verified: true, // Kept for compatibility? Might not be needed if returning data.
+      valid: true,    // Use 'valid' consistent with ProfilePage useEffect check
+      teamName: entryData.name,
+      managerName: `${entryData.player_first_name} ${entryData.player_last_name}`,
+      overallRank: overallRank,
+      // --- ADDED FIELDS ---
+      totalPoints: totalPoints,
+      teamValue: teamValue,
+      currentGameweek: currentGameweek,
+      gameweekPoints: gameweekPoints,
+      transfersMade: transfersMade,
+      transfersAvailable: null, // FPL API doesn't easily provide this here
+    };
 
-    // Check if the response contains the expected fields
-    if (!data.name || !data.player_first_name || !data.player_last_name) {
-      return NextResponse.json(
-        { error: "Invalid FPL Team data format. Please try again." },
-        { status: 400 }
-      );
-    }
+    console.log(`[VERIFY_FPL] Successfully verified team ${fplTeamId}. Returning data.`);
+    return NextResponse.json(responsePayload);
 
-    // Extract team name from the response
-    const teamName = data.name;
-    const playerName = data.player_first_name + " " + data.player_last_name;
-
-    return NextResponse.json({
-      verified: true,
-      teamName: teamName,
-      playerName: playerName
-    });
   } catch (error) {
+    console.error(`[VERIFY_FPL] General error verifying FPL team ID ${request.url}:`, error);
+    // Generic error for client
     return NextResponse.json(
-      { error: "Failed to verify FPL Team ID. Please try again later." },
+      { valid: false, error: "Failed to verify FPL Team ID. Please try again later." },
       { status: 500 }
     );
   }

@@ -1,28 +1,25 @@
 "use client";
 
-import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Button } from "@/app/components/ui/button";
-import { Trophy, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
-import { useMyLeagues } from "@/app/hooks/useMyLeagues";
-import MyLeagueCard from "@/app/components/leagues/MyLeagueCard";
+import LeagueCard from "@/app/components/leagues/LeagueCard";
+import { MyLeagueInfo } from "@/app/types";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { EmptyState } from "@/app/components/shared/EmptyState";
+import { useMyLeagues } from "@/app/hooks/leagues";
 
 export default function MyLeaguesPage() {
+  const router = useRouter();
   const { activeLeagues, completedLeagues, isLoading, error } = useMyLeagues();
 
-  const EmptyState = ({ message }: { message: string }) => (
-    <div className="text-center py-12">
-      <Trophy className="h-12 w-12 mx-auto text-gray-600 mb-4" />
-      <h3 className="text-xl font-medium text-gray-400 mb-2">No leagues found</h3>
-      <p className="text-gray-500">{message}</p>
-      <Link href="/leagues/weekly">
-        <Button className="mt-6 bg-indigo-600 hover:bg-indigo-700">
-          Browse Leagues
-        </Button>
-      </Link>
-    </div>
-  );
+  useEffect(() => {
+    if (error instanceof Error && error.message === 'AUTH_REQUIRED') {
+      router.push('/api/auth/signin?callbackUrl=/leagues/my-leagues');
+    }
+  }, [error, router]);
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
@@ -60,8 +57,14 @@ export default function MyLeaguesPage() {
                 </div>
               ) : activeLeagues.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
-                  {activeLeagues.map((league) => (
-                    <MyLeagueCard key={league.id} league={league} />
+                  {activeLeagues.map((league: MyLeagueInfo) => (
+                    <LeagueCard
+                      key={league.id}
+                      league={league}
+                      mode="joined"
+                      onJoin={() => { }}
+                      onView={() => router.push(`/leagues/weekly/${league.id}`)}
+                    />
                   ))}
                 </div>
               ) : (
@@ -83,8 +86,14 @@ export default function MyLeaguesPage() {
                 </div>
               ) : completedLeagues.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {completedLeagues.map((league) => (
-                    <MyLeagueCard key={league.id} league={league} />
+                  {completedLeagues.map((league: MyLeagueInfo) => (
+                    <LeagueCard
+                      key={league.id}
+                      league={league}
+                      mode="joined"
+                      onJoin={() => { }}
+                      onView={() => router.push(`/leagues/weekly/${league.id}`)}
+                    />
                   ))}
                 </div>
               ) : (

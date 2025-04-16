@@ -99,10 +99,16 @@ export default function LeagueDetailsPage() {
     }
   }, [activeTab, league?.status, effectiveLeagueStatus, isDeadlinePassed, gamesInProgress, refetchLeaderboard, refetchLeague]);
 
+  // // Calculate prize pool
+  // const prizePool = league
+  //   ? league.entryFee * league.currentParticipants * (1 - (league.platformFeePercentage || 5) / 100)
+  //   : 0;
   // Calculate prize pool
-  const prizePool = league
-    ? league.entryFee * league.currentParticipants * (1 - (league.platformFeePercentage || 5) / 100)
-    : 0;
+  const prizePool = (league && league.entryFee != null && league.currentParticipants != null) // Check required values exist
+    // --- FIX: Explicitly convert entryFee to number ---
+    ? Number(league.entryFee) * league.currentParticipants * (1 - (league.platformFeePercentage || 10) / 100) // Use Number() for conversion
+    // --- END FIX ---
+    : 0; // Default to 0 if league or necessary fields are missing
 
   // Handle joining a league
   const handleJoinLeague = () => {
@@ -233,7 +239,7 @@ export default function LeagueDetailsPage() {
                 prizePool={prizePool}
                 isJoinDisabled={isJoinDisabled}
                 minutesUntilFirstKickoff={minutesUntilFirstKickoff}
-                leaderboard={leaderboard}
+              // leaderboard={leaderboard}
               />
             </TabsContent>
 
