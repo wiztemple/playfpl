@@ -31,6 +31,7 @@ export default function GameWeekSelector() {
                 const response = await fetch("/api/gameweek/current");
                 if (response.ok) {
                     const data = await response.json();
+                    console.log(data, 'cuurrrent game weee data');
                     setCurrentGameweek(data.id);
                 }
             } catch (error) {

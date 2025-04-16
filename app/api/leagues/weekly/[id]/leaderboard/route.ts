@@ -1,333 +1,305 @@
+// import { NextRequest, NextResponse } from "next/server";
+// import { prisma } from "@/lib/db";
+// import type { DisplayedLeaderboardEntry, League } from "@/app/types";
+// import { checkGameweekStatus } from "@/lib/fpl-api";
+// import { finalizeLeagueStandings } from '@/lib/league-utils';
+// import type { LeagueEntry, User } from '@prisma/client';
+
+// interface EntryWithUser extends LeagueEntry {
+//   user: Pick<User, 'id' | 'name' | 'fplTeamId' | 'fplTeamName'>;
+// }
+
+// export async function GET(
+//   request: NextRequest,
+//   context: { params: { id: string } }
+// ) {
+//   const functionStartTime = Date.now();
+//   try {
+//     const url = request.nextUrl;
+//     const page = parseInt(url.searchParams.get('page') || '1');
+//     const limit = parseInt(url.searchParams.get('limit') || '20');
+//     const offset = (page - 1) * limit;
+//     const params = await context.params;
+//     const leagueId = params.id;
+
+//     if (!leagueId) {
+//       return NextResponse.json({ error: "League ID is required" }, { status: 400 });
+//     }
+
+//     console.log(`[API_LEADERBOARD] Request: League ${leagueId}, Page ${page}, Limit ${limit}`);
+
+//     // --- 1. Fetch League Info ---
+//     // Still fetch the league to get its status, highest points etc.
+//     let league: League | null = await prisma.weeklyLeague.findUnique({
+//       where: { id: leagueId },
+//     });
+
+//     if (!league) {
+//       console.warn(`[API_LEADERBOARD] League ${leagueId} not found.`);
+//       return NextResponse.json({ error: "League not found" }, { status: 404 });
+//     }
+
+//     // --- 2. Check Status & Handle Completion Transition (Optional Here) ---
+//     // You might still want to check status here to potentially trigger
+//     // finalization *if* the cron job hasn't run yet after GW completion.
+//     // Or, rely solely on the cron job to eventually mark it as completed.
+//     // Keeping the completion check here provides faster finalization upon viewing.
+//     if (league.status === 'active') {
+//       const gameweekStatus = await checkGameweekStatus(league.gameweek);
+//       const isTrulyComplete = gameweekStatus.isComplete && gameweekStatus.bonusPointsAdded;
+
+//       if (isTrulyComplete) {
+//         console.log(`[API_LEADERBOARD] GW ${league.gameweek} completed. Finalizing League ${leagueId} via API request.`);
+//         // --- Finalization Logic (Copied from previous version) ---
+//         const finalEntriesForStandings = await prisma.leagueEntry.findMany({
+//           where: { leagueId: leagueId },
+//           include: { user: { select: { id: true, name: true, fplTeamId: true, fplTeamName: true } } }
+//         });
+//         const totalParticipants = finalEntriesForStandings.length;
+
+//         const totalPot = league.entryFee * totalParticipants;
+//         const platformFee = totalPot * (league.platformFeePercentage / 100);
+//         const prizePool = Math.max(0, totalPot - platformFee);
+//         console.log(`[API_LEADERBOARD] Finalizing: Participants=${totalParticipants}, Pot=${totalPot}, Fee%=${league.platformFeePercentage}, Fee=${platformFee}, Pool=${prizePool}`);
+//         try {
+//           await finalizeLeagueStandings(league, finalEntriesForStandings, prizePool);
+//           league = await prisma.weeklyLeague.update({
+//             where: { id: leagueId }, data: { status: 'completed' },
+//           });
+//           console.log(`[API_LEADERBOARD] League ${leagueId} status updated to completed via API request.`);
+//         } catch (finalizationError) {
+//           console.error(`[API_LEADERBOARD] CRITICAL ERROR during finalizeLeagueStandings for League ${leagueId} triggered by API request:`, finalizationError);
+//           // Log but continue, maybe cron job will fix it
+//         }
+//       }
+//     }
+//     // Note: We removed the 'upcoming' -> 'active' transition here, assuming
+//     // the cron job or another mechanism handles that, or it's less critical
+//     // for the leaderboard view itself. Add it back if needed.
+
+//     // --- !! REMOVED POINT FETCHING AND UPDATING LOGIC !! ---
+
+//     // --- 3. Fetch Paginated Data (Points/Rank assumed up-to-date) ---
+//     const totalCount = await prisma.leagueEntry.count({
+//       where: { leagueId: leagueId }
+//     });
+
+//     // Determine sort order (same logic, relying on DB values)
+//     let sortOrder: any;
+//     if (league.status === 'upcoming') {
+//       sortOrder = [{ joinedAt: 'asc' as const }];
+//     } else if (league.status === 'completed') {
+//       // Use stored rank. Remove 'nulls' fix if DB handles it now.
+//       sortOrder = [{ rank: 'asc' as const }, { finalPoints: 'desc' as const }, { id: 'asc' as const }];
+//     } else { // active
+//       // Use stored rank. Remove 'nulls' fix if DB handles it now.
+//       sortOrder = [{ rank: 'asc' as const }, { finalPoints: 'desc' as const }, { id: 'asc' as const }];
+//     }
+
+//     // Fetch the page data
+//     const entriesForPage: EntryWithUser[] = await prisma.leagueEntry.findMany({
+//       where: { leagueId: leagueId },
+//       include: {
+//         user: {
+//           select: { id: true, name: true, fplTeamId: true, fplTeamName: true },
+//         },
+//       },
+//       orderBy: sortOrder,
+//       skip: offset,
+//       take: limit
+//     });
+
+//     // --- 4. Transform Data ---
+//     const highestGwPointsForLeague = league.currentHighestGwPoints ?? 0;
+//     const leaderboardData: DisplayedLeaderboardEntry[] = entriesForPage.map((entry) => {
+//       const user = entry.user;
+//       const weeklyPoints = entry.weeklyPoints ?? 0;
+//       const rank = entry.rank;
+//       const isWinner = league.status === 'active' &&
+//         weeklyPoints > 0 &&
+//         weeklyPoints === highestGwPointsForLeague;
+
+//       // Mapping logic remains largely the same, using fields directly from 'entry'
+//       const mappedEntry: DisplayedLeaderboardEntry = {
+//         id: entry.id, userId: entry.userId, leagueId: entry.leagueId, fplTeamId: entry.fplTeamId,
+//         joinedAt: entry.joinedAt.toISOString(), paid: entry.paid, paymentId: entry.paymentId,
+//         pointsAtStart: entry.pointsAtStart, finalPoints: entry.finalPoints, weeklyPoints: weeklyPoints,
+//         rank: rank, winnings: entry.winnings || 0, payoutStatus: entry.payoutStatus,
+//         userName: user?.name, teamName: user?.fplTeamName, position: rank, isGwWinner: isWinner,
+//         isCurrentUser: false, points: entry.finalPoints, gwPoints: weeklyPoints, startPoints: entry.pointsAtStart,
+//       };
+//       return mappedEntry;
+//     });
+
+//     // --- 5. Prepare and Return Response ---
+//     const responseData = {
+//       leaderboard: leaderboardData,
+//       meta: {
+//         refreshed: false, // Data is as fresh as the last cron run, not refreshed *by this request*
+//         timestamp: new Date().toISOString(), // Timestamp of the API response
+//         count: totalCount, page: page, limit: limit, totalPages: Math.ceil(totalCount / limit),
+//         leagueStatus: league.status,
+//         highestGwPoints: league.status === 'active' ? highestGwPointsForLeague : null
+//       }
+//     };
+
+//     const duration = Date.now() - functionStartTime;
+//     console.log(`[API_LEADERBOARD] Response Sent: League ${leagueId}, Page ${page}. Status: ${league.status}. Duration: ${duration}ms`);
+
+//     return NextResponse.json(responseData);
+
+//   } catch (error) {
+//     const duration = Date.now() - functionStartTime;
+//     console.error(`[API_LEADERBOARD] FATAL ERROR for league ${context?.params?.id}:`, error);
+//     const errorMessage = error instanceof Error ? error.message : "Unknown error";
+//     return NextResponse.json(
+//       { error: "Failed to fetch leaderboard", details: "An internal server error occurred." },
+//       { status: 500 }
+//     );
+//   }
+// }
+
+// app/api/leagues/weekly/[id]/leaderboard/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/db";
-import { LeaderboardEntry } from "@/app/types";
-import { fetchLiveGameweekPoints, checkGameweekStatus } from "@/lib/fpl-api";
+import { authOptions } from "@/lib/auth-options"; // Adjust path if needed
+import type { Session } from "next-auth";
+import { Prisma } from "@prisma/client";
+// Import the specific type expected by the LeaderboardCard component
+import type { DisplayedLeaderboardEntry } from "@/app/types"; // Adjust path if needed
+
+// Define session type
+interface SessionWithUser extends Omit<Session, 'user'> { user?: { id?: string }; }
+
+// Define structure fetched from DB (includes user relation)
+type FetchedLeagueEntry = Prisma.LeagueEntryGetPayload<{
+  include: { user: { select: { id: true, name: true, fplTeamId: true, fplTeamName: true } } }
+}>;
+
 
 export async function GET(
-  request: Request,
+  request: NextRequest,
   context: { params: { id: string } }
 ) {
+  const functionStartTime = Date.now();
+  const params = await context.params;
+  const leagueId = params.id;
+  const url = request.nextUrl;
+  const page = parseInt(url.searchParams.get('page') || '1');
+  const limit = parseInt(url.searchParams.get('limit') || '30'); // Use consistent limit
+  const offset = (page - 1) * limit;
+
+  if (!leagueId) return NextResponse.json({ error: "League ID required" }, { status: 400 });
+  if (isNaN(page) || page < 1) return NextResponse.json({ error: "Invalid page" }, { status: 400 });
+  if (isNaN(limit) || limit < 1 || limit > 100) return NextResponse.json({ error: "Invalid limit" }, { status: 400 });
+
+  console.log(`[API_LEADERBOARD] Request: League ${leagueId}, Page ${page}, Limit ${limit}`);
+
   try {
-    const params = await context.params;
-    const leagueId = params.id;
+    // Fetch session to identify current user (optional, only needed for isCurrentUser flag)
+    const session: Session | null = await getServerSession(authOptions);
+    const currentUserId = session?.user?.id;
+    if (currentUserId) console.log(`[API_LEADERBOARD] Current User ID: ${currentUserId}`);
 
-    console.log(`[LEADERBOARD] Processing request for league ${leagueId}`);
-
-    // Get the league to check if it exists, its status and gameweek
+    // --- 1. Fetch League Info (Only necessary fields) ---
     const league = await prisma.weeklyLeague.findUnique({
       where: { id: leagueId },
-      include: {
-        entries: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                fplTeamId: true,
-                fplTeamName: true,
-              },
-            },
-          },
-        },
-      },
+      select: { id: true, status: true, gameweek: true, currentHighestGwPoints: true } // Select fields needed
     });
 
     if (!league) {
-      return NextResponse.json(
-        { error: "League not found" },
-        { status: 404 }
-      );
+      console.warn(`[API_LEADERBOARD] League ${leagueId} not found.`);
+      return NextResponse.json({ error: "League not found" }, { status: 404 });
     }
 
-    // Check gameweek status for both upcoming and active leagues
-    if (league.status === 'upcoming' || league.status === 'active') {
-      const gameweekStatus = await checkGameweekStatus(league.gameweek);
+    // --- !! REMOVED AUTOMATIC FINALIZATION BLOCK !! ---
 
-      // If any matches have started but league is still upcoming, update to active
-      if (gameweekStatus.hasStarted && league.status === 'upcoming') {
-        console.log(`[LEADERBOARD] Gameweek ${league.gameweek} has started, updating league status to active`);
+    // --- 2. Fetch Paginated Entries ---
+    const totalCount = await prisma.leagueEntry.count({ where: { leagueId: leagueId } });
 
-        await prisma.weeklyLeague.update({
-          where: { id: leagueId },
-          data: { status: 'active' },
-        });
-
-        // Update the league object for this request
-        league.status = 'active';
-      }
-
-      // If all matches have finished and league is still active, update to completed
-      if (gameweekStatus.isComplete && league.status === 'active') {
-        console.log(`[LEADERBOARD] Gameweek ${league.gameweek} has completed, updating league status to completed`);
-
-        await prisma.weeklyLeague.update({
-          where: { id: leagueId },
-          data: { status: 'completed' },
-        });
-
-        // Update the league object for this request
-        league.status = 'completed';
-      }
+    // --- FIX: Determine sort order based on status AND user request ---
+    let sortOrder: Prisma.LeagueEntryOrderByWithRelationInput[];
+    if (league.status === 'upcoming') {
+      sortOrder = [{ joinedAt: 'asc' }];
+    } else if (league.status === 'completed') {
+      // Completed leagues use final rank
+      sortOrder = [{ rank: 'asc' }, { finalPoints: 'desc' }, { id: 'asc' }];
+    } else { // active league - SORT BY WEEKLY POINTS!
+      sortOrder = [{ weeklyPoints: 'desc' }, { joinedAt: 'asc' }]; // Primary: weeklyPoints DESC, Tiebreaker: joinedAt ASC
     }
+    console.log(`[API_LEADERBOARD] Using sort order for status '${league.status}':`, JSON.stringify(sortOrder));
 
-    let dataRefreshed = false;
-    let entriesWithUsers = league.entries;
 
-    // For active leagues, fetch live points from the FPL API
-    if (league.status === 'active') {
-      console.log(`[LEADERBOARD] League ${leagueId} is active, fetching live points for gameweek ${league.gameweek}`);
+    // Fetch the page data including user relation
+    const entriesForPage: FetchedLeagueEntry[] = await prisma.leagueEntry.findMany({
+      where: { leagueId: leagueId },
+      include: {
+        user: { select: { id: true, name: true, fplTeamId: true, fplTeamName: true } },
+      },
+      orderBy: sortOrder,
+      skip: offset,
+      take: limit
+    });
 
-      // Extract the FPL team IDs
-      const fplTeamIds = entriesWithUsers
-        .map(entry => entry.user.fplTeamId)
-        .filter((id): id is number => id !== null && id !== undefined);
+    // --- 3. Transform Data to Match DisplayedLeaderboardEntry Type ---
+    const highestGwPointsForLeague = league.currentHighestGwPoints ?? 0;
 
-      console.log(`[LEADERBOARD] Extracted ${fplTeamIds.length} valid FPL team IDs`);
-
-      if (fplTeamIds.length > 0) {
-        // Fetch live points for all FPL teams with improved error handling
-        console.log(`[LEADERBOARD] Calling fetchLiveGameweekPoints for gameweek ${league.gameweek}...`);
-        const livePoints = await fetchLiveGameweekPoints(fplTeamIds, league.gameweek);
-        console.log(`[LEADERBOARD] Received live points:`, livePoints);
-
-        if (Object.keys(livePoints).length > 0) {
-          // Update entries with the latest points using a transaction for consistency
-          await prisma.$transaction(
-            entriesWithUsers.map((entry) => {
-              const fplTeamId = entry.user.fplTeamId;
-              if (!fplTeamId || !(fplTeamId in livePoints)) return prisma.$executeRaw`SELECT 1`;
-
-              const points = livePoints[fplTeamId];
-              console.log(`Updating entry ${entry.id} with ${points} points`);
-
-              return prisma.leagueEntry.update({
-                where: {
-                  id: entry.id
-                },
-                data: {
-                  weeklyPoints: points,
-                  finalPoints: (entry.pointsAtStart || 0) + points, // Add starting points to current GW points
-                }
-              });
-            })
-          );
-
-          dataRefreshed = true;
-
-          // Refresh entries with updated data
-          entriesWithUsers = await prisma.leagueEntry.findMany({
-            where: {
-              leagueId: leagueId,
-            },
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  fplTeamId: true,
-                  fplTeamName: true,
-                },
-              },
-            },
-          });
-
-          // Check again if the gameweek has completed
-          const updatedGameweekStatus = await checkGameweekStatus(league.gameweek);
-
-          if (updatedGameweekStatus.isComplete) {
-            console.log(`[LEADERBOARD] Gameweek ${league.gameweek} has completed after points update, finalizing league`);
-
-            // Update league status
-            await prisma.weeklyLeague.update({
-              where: { id: leagueId },
-              data: { status: 'completed' },
-            });
-
-            // Update the league object for this request
-            league.status = 'completed';
-
-            // Calculate prize pool
-            const prizePool = league.entryFee * entriesWithUsers.length * (1 - (league.platformFeePercentage || 5) / 100);
-
-            // Finalize standings and calculate winnings
-            const { finalizeLeagueStandings } = await import('@/lib/league-utils');
-            await finalizeLeagueStandings(league, entriesWithUsers as any, prizePool);
-
-            // Refresh entries again to get final rankings and winnings
-            entriesWithUsers = await prisma.leagueEntry.findMany({
-              where: {
-                leagueId: leagueId,
-              },
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    name: true,
-                    fplTeamId: true,
-                    fplTeamName: true,
-                  },
-                },
-              },
-            });
-          }
-        }
-      }
-    }
-
-    // Transform the data for the frontend
-    const leaderboardWithTeamNames: LeaderboardEntry[] = entriesWithUsers.map((entry) => {
-      // Use the user data already included in the query
+    const leaderboardData: DisplayedLeaderboardEntry[] = entriesForPage.map((entry) => {
       const user = entry.user;
-      const startPoints = entry.pointsAtStart || 0; // Use existing pointsAtStart field
-      const weeklyPoints = entry.weeklyPoints || 0;
-      const finalPoints = entry.finalPoints || (startPoints + weeklyPoints);
+      const weeklyPoints = entry.weeklyPoints ?? 0;
+      const rank = entry.rank; // This rank is now based on weeklyPoints if active (needs cron job update)
+      const isWinner = league.status === 'active' && weeklyPoints > 0 && weeklyPoints === highestGwPointsForLeague;
 
-      // Format the entry for the frontend
+      // Ensure structure matches DisplayedLeaderboardEntry defined in app/types.ts
+      // Convert Decimal/Date to number/string
       return {
-        id: entry.id,
-        userId: entry.userId,
-        rank: entry.rank || 0,
-        position: entry.rank || 0, // Ensure position is set
-        points: finalPoints,
-        finalPoints: finalPoints,
-
-        // Starting points - stored separately now
-        startPoints: startPoints,
-        startingPoints: startPoints,
-        starting_points: startPoints,
-
-        // GW points - ensure this is properly set
-        weeklyPoints: weeklyPoints,
-        gwPoints: weeklyPoints,
-        event_total: weeklyPoints, // Add FPL API format
-
-        // Total points
-        total: finalPoints,
-
-        // Team and manager names - ensure all variations are included
-        userName: user?.name || `Manager ${entry.id.substring(0, 4)}`,
-        teamName: user?.fplTeamName || `Team ${entry.id.substring(0, 4)}`,
-        team_name: user?.fplTeamName || `Team ${entry.id.substring(0, 4)}`,
-        entry_name: user?.fplTeamName || `Team ${entry.id.substring(0, 4)}`,
-
-        managerName: user?.name || `Manager ${entry.id.substring(0, 4)}`,
-        manager_name: user?.name || `Manager ${entry.id.substring(0, 4)}`,
-        player_name: user?.name || `Manager ${entry.id.substring(0, 4)}`,
-        displayName: user?.name || `Manager ${entry.id.substring(0, 4)}`,
-        display_name: user?.name || `Manager ${entry.id.substring(0, 4)}`,
-        name: user?.name || `Manager ${entry.id.substring(0, 4)}`,
-
-        // User info
-        user: {
-          id: user?.id || entry.userId,
-          name: user?.name || `Manager ${entry.id.substring(0, 4)}`,
-        },
-
-        // Entry info for FPL API compatibility
-        entry: {
-          name: user?.fplTeamName || `Team ${entry.id.substring(0, 4)}`,
-          player_name: user?.name || `Manager ${entry.id.substring(0, 4)}`,
-        },
-
-        // Include joined timestamp
-        joinedAt: entry.joinedAt ? entry.joinedAt.toISOString() : new Date().toISOString(),
-
-        // Track winnings if available
-        winnings: entry.winnings || 0,
-
-        // Add has_played flag for FPL API compatibility
-        has_played: weeklyPoints > 0,
-
-        // Add current user flag
-        isCurrentUser: false, // Will be set on the client side
-        is_current_user: false, // Will be set on the client side
+        id: entry.id, userId: entry.userId, leagueId: entry.leagueId, fplTeamId: entry.fplTeamId,
+        joinedAt: entry.joinedAt.toISOString(), // Date -> string
+        paid: entry.paid, paymentId: entry.paymentId,
+        pointsAtStart: entry.pointsAtStart, // Keep as number | null
+        finalPoints: entry.finalPoints, // Keep as number | null
+        weeklyPoints: weeklyPoints, // Use calculated var (number)
+        rank: rank, // Use rank from DB (number | null)
+        // FIX: Convert winnings Decimal -> number
+        winnings: entry.winnings?.toNumber() ?? 0,
+        payoutStatus: entry.payoutStatus,
+        // User details
+        userName: user?.name ?? null,
+        teamName: user?.fplTeamName ?? null,
+        // Fields required by DisplayedLeaderboardEntry
+        position: rank, // Use rank for position display
+        isGwWinner: isWinner,
+        isCurrentUser: entry.userId === currentUserId, // <<< FIX: Check against current user
+        // Ensure consistent naming with DisplayedLeaderboardEntry type
+        points: entry.finalPoints, // Assuming 'points' means finalPoints
+        gwPoints: weeklyPoints, // Assuming 'gwPoints' means weeklyPoints
+        startPoints: entry.pointsAtStart, // Assuming 'startPoints' means pointsAtStart
       };
     });
 
-    // Sort the leaderboard based on league status
-    let sortedLeaderboard: LeaderboardEntry[];
-
-    if (league.status === 'upcoming') {
-      // For upcoming leagues, sort by join date
-      sortedLeaderboard = leaderboardWithTeamNames.sort((a, b) => {
-        // Safely handle potentially invalid date strings
-        try {
-          const dateA = a.joinedAt ? new Date(a.joinedAt).getTime() : 0;
-          const dateB = b.joinedAt ? new Date(b.joinedAt).getTime() : 0;
-          return dateA - dateB;
-        } catch {
-          return 0; // If date parsing fails, maintain order
-        }
-      });
-    } else if (league.status === 'completed') {
-      // For completed leagues, sort by rank
-      sortedLeaderboard = leaderboardWithTeamNames.sort((a, b) =>
-        (a.rank || 0) - (b.rank || 0)
-      );
-    } else {
-      // For active leagues, sort by points
-      sortedLeaderboard = leaderboardWithTeamNames.sort((a, b) =>
-        (b.points || 0) - (a.points || 0)
-      );
-    }
-
-    // Calculate positions for active leagues based on points
-    if (league.status === 'active') {
-      let currentPosition = 1;
-      let lastPoints = -1;
-      let samePointsCount = 0;
-
-      sortedLeaderboard.forEach((entry, index) => {
-        if (entry.points !== lastPoints) {
-          currentPosition = index + 1;
-          lastPoints = entry.points || 0;
-          samePointsCount = 0;
-        } else {
-          samePointsCount++;
-        }
-
-        entry.position = currentPosition;
-        entry.rank = currentPosition; // Update rank to match position
-
-        // Find the entry with the highest GW points
-        const highestGwPoints = Math.max(...sortedLeaderboard.map(e => e.weeklyPoints || 0));
-        entry.isGwWinner = entry.weeklyPoints === highestGwPoints && highestGwPoints > 0;
-        entry.is_gw_winner = entry.isGwWinner;
-        entry.gw_winner = entry.isGwWinner;
-      });
-
-      // Update ranks in the database if data has been refreshed
-      if (dataRefreshed) {
-        await Promise.all(
-          sortedLeaderboard.map(entry =>
-            prisma.leagueEntry.update({
-              where: { id: entry.id },
-              data: { rank: entry.rank }
-            })
-          )
-        );
-      }
-    }
-
-    // Add timestamp and refresh info for client
+    // --- 4. Prepare and Return Response ---
     const responseData = {
-      leaderboard: sortedLeaderboard,
+      leaderboard: leaderboardData,
       meta: {
-        refreshed: dataRefreshed,
+        refreshed: false,
         timestamp: new Date().toISOString(),
-        count: sortedLeaderboard.length,
-        leagueStatus: league.status
+        count: totalCount,
+        page: page,
+        limit: limit,
+        totalPages: Math.ceil(totalCount / limit),
+        leagueStatus: league.status, // Pass current status
+        highestGwPoints: league.status === 'active' ? highestGwPointsForLeague : null
       }
     };
 
-    console.log(`Returning leaderboard at ${new Date().toISOString()} with ${sortedLeaderboard.length} entries. Data refreshed: ${dataRefreshed}`);
-
+    const duration = Date.now() - functionStartTime;
+    console.log(`[API_LEADERBOARD] Response Sent: League ${leagueId}, Page ${page}. Status: ${league.status}. Duration: ${duration}ms`);
     return NextResponse.json(responseData);
+
   } catch (error) {
-    console.error("Error fetching leaderboard:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch leaderboard", details: error instanceof Error ? error.message : String(error) },
-      { status: 500 }
-    );
+    // ... Error handling ...
+    const duration = Date.now() - functionStartTime; console.error(`[API_LEADERBOARD] FATAL ERROR for league ${context?.params?.id}:`, error); return NextResponse.json({ error: "Failed to fetch leaderboard", details: error instanceof Error ? error.message : "Unknown error" }, { status: 500 });
   }
 }

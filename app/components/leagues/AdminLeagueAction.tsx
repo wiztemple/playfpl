@@ -1,176 +1,3 @@
-// "use client";
-
-// import { useState } from "react";
-// import { useRouter } from "next/navigation";
-// import {
-//     Edit,
-//     Trash2,
-//     AlertTriangle,
-//     ShieldAlert,
-//     Lock,
-//     UserCheck,
-//     Loader2
-// } from "lucide-react";
-// import { Button } from "@/app/components/ui/button";
-// import {
-//     Dialog,
-//     DialogContent,
-//     DialogDescription,
-//     DialogFooter,
-//     DialogHeader,
-//     DialogTitle,
-// } from "@/app/components/ui/dialog";
-// import { WeeklyLeague } from "@/app/types";
-// import { toast } from "@/app/hooks/useToast";
-
-// interface AdminLeagueActionsProps {
-//     league: WeeklyLeague;
-//     isAdmin: boolean;
-// }
-
-// export default function AdminLeagueActions({ league, isAdmin }: AdminLeagueActionsProps) {
-//     const router = useRouter();
-//     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-//     const [isDeleting, setIsDeleting] = useState(false);
-
-//     // Check if league can be edited/deleted
-//     const canEdit = league.status === "upcoming";
-//     const canDelete = league.status === "upcoming" && league.currentParticipants === 0;
-
-//     // If not admin, don't render anything
-//     if (!isAdmin) {
-//         return null;
-//     }
-
-//     const handleEdit = () => {
-//         router.push(`/leagues/weekly/${league.id}/edit`);
-//     };
-
-//     const confirmDelete = async () => {
-//         try {
-//             setIsDeleting(true);
-
-//             const response = await fetch(`/api/leagues/weekly/${league.id}`, {
-//                 method: "DELETE",
-//             });
-
-//             if (!response.ok) {
-//                 const data = await response.json();
-//                 throw new Error(data.error || "Failed to delete league");
-//             }
-
-//             toast({
-//                 title: "League deleted",
-//                 description: "The league has been successfully deleted",
-//                 variant: "default",
-//             });
-
-//             // Redirect to leagues page
-//             router.push("/leagues/weekly");
-//             router.refresh();
-//         } catch (error: any) {
-//             toast({
-//                 title: "Error",
-//                 description: error.message || "Failed to delete league",
-//                 variant: "destructive",
-//             });
-//         } finally {
-//             setIsDeleting(false);
-//             setIsDeleteDialogOpen(false);
-//         }
-//     };
-
-//     return (
-//         <div className="flex items-center space-x-2">
-//             <Button
-//                 onClick={handleEdit}
-//                 disabled={!canEdit}
-//                 variant="outline"
-//                 size="sm"
-//                 className={`flex items-center ${canEdit
-//                         ? "text-amber-400 border-amber-600/30 hover:text-amber-300 hover:border-amber-500/50 hover:bg-amber-950/30"
-//                         : "text-gray-500 border-gray-700 cursor-not-allowed"
-//                     }`}
-//                 title={canEdit ? "Edit league" : "Cannot edit a league that has already started"}
-//             >
-//                 <Edit className="h-4 w-4 mr-1" />
-//                 Edit
-//             </Button>
-
-//             <Button
-//                 onClick={() => setIsDeleteDialogOpen(true)}
-//                 disabled={!canDelete}
-//                 variant="outline"
-//                 size="sm"
-//                 className={`flex items-center ${canDelete
-//                         ? "text-red-400 border-red-600/30 hover:text-red-300 hover:border-red-500/50 hover:bg-red-950/30"
-//                         : "text-gray-500 border-gray-700 cursor-not-allowed"
-//                     }`}
-//                 title={
-//                     league.currentParticipants > 0
-//                         ? "Cannot delete a league with participants"
-//                         : league.status !== "upcoming"
-//                             ? "Cannot delete a league that has already started"
-//                             : "Delete league"
-//                 }
-//             >
-//                 <Trash2 className="h-4 w-4 mr-1" />
-//                 Delete
-//             </Button>
-
-//             {/* Delete Confirmation Dialog */}
-//             <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-//                 <DialogContent className="bg-gray-900 border border-gray-800 text-gray-100">
-//                     <DialogHeader>
-//                         <DialogTitle className="flex items-center text-red-400">
-//                             <AlertTriangle className="h-5 w-5 mr-2" />
-//                             Delete League
-//                         </DialogTitle>
-//                         <DialogDescription className="text-gray-400">
-//                             Are you sure you want to delete this league? This action cannot be undone.
-//                         </DialogDescription>
-//                     </DialogHeader>
-
-//                     <div className="py-4">
-//                         <div className="p-4 bg-gray-800/50 rounded-lg border border-red-900/30">
-//                             <h3 className="font-medium text-gray-200">{league.name}</h3>
-//                             <p className="text-sm text-gray-400">Gameweek {league.gameweek}</p>
-//                         </div>
-//                     </div>
-
-//                     <DialogFooter>
-//                         <Button
-//                             onClick={() => setIsDeleteDialogOpen(false)}
-//                             variant="outline"
-//                             className="border-gray-700 text-gray-300 hover:bg-gray-800"
-//                         >
-//                             Cancel
-//                         </Button>
-//                         <Button
-//                             onClick={confirmDelete}
-//                             variant="destructive"
-//                             className="bg-red-600 hover:bg-red-700 text-white"
-//                             disabled={isDeleting}
-//                         >
-//                             {isDeleting ? (
-//                                 <>
-//                                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-//                                     Deleting...
-//                                 </>
-//                             ) : (
-//                                 <>
-//                                     <Trash2 className="h-4 w-4 mr-2" />
-//                                     Delete League
-//                                 </>
-//                             )}
-//                         </Button>
-//                     </DialogFooter>
-//                 </DialogContent>
-//             </Dialog>
-//         </div>
-//     );
-// }
-
 "use client";
 
 import { useState } from "react";
@@ -191,23 +18,29 @@ import {
     DialogTitle,
 } from "@/app/components/ui/dialog";
 import { toast } from "@/app/hooks/useToast";
-import { WeeklyLeague } from "@/app/types";
+// --- Import the correct, consistent type ---
+import type { LeagueWithUserStatus } from "@/app/types"; // Use the type passed down from LeagueHeader
+// Remove the import for the manual WeeklyLeague interface:
+// import { WeeklyLeague } from "@/app/types"; // REMOVE OR COMMENT OUT
+// --- End Import Changes ---
 import { useQueryClient } from "@tanstack/react-query";
 
 interface AdminLeagueActionsProps {
-    league: WeeklyLeague;
+    // --- CHANGE THE TYPE HERE ---
+    league: LeagueWithUserStatus; // Expect the type passed down from LeagueHeader
     isAdmin: boolean;
 }
 
 export default function AdminLeagueActions({ league, isAdmin }: AdminLeagueActionsProps) {
     const router = useRouter();
+    const queryClient = useQueryClient();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
-    const queryClient = useQueryClient();
 
-    // Check if league can be edited/deleted
+    // Check if league can be edited/deleted using fields available on LeagueWithUserStatus
+    // Use nullish coalescing for safety in case currentParticipants is null/undefined
     const canEdit = league.status === "upcoming";
-    const canDelete = league.status === "upcoming" && league.currentParticipants === 0;
+    const canDelete = league.status === "upcoming" && (league.currentParticipants ?? 0) === 0;
 
     // If not admin, don't render anything
     if (!isAdmin) {
@@ -219,35 +52,46 @@ export default function AdminLeagueActions({ league, isAdmin }: AdminLeagueActio
     };
 
     const confirmDelete = async () => {
+        if (!league?.id) {
+            toast({ title: "Error", description: "League ID is missing.", variant: "destructive" });
+            setIsDeleting(false); // Ensure loading state is reset
+            setIsDeleteDialogOpen(false);
+            return;
+        }
         try {
             setIsDeleting(true);
 
             const response = await fetch(`/api/leagues/weekly/${league.id}`, {
                 method: "DELETE",
-                credentials: "include"
+                // credentials: "include" // Usually only needed for cross-origin cookies
             });
 
+            // Attempt to parse JSON regardless of response.ok to get error details
+            const responseData = await response.json().catch(() => ({ error: "Failed to parse server response" }));
+
             if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.error || "Failed to delete league");
+                // Use error message from API response if available
+                throw new Error(responseData.error || `Failed to delete league (Status: ${response.status})`);
             }
 
-            // Invalidate queries to refresh data
-            queryClient.invalidateQueries({ queryKey: ['leagues'] });
-
             toast({
-                title: "League deleted",
-                description: "The league has been successfully deleted",
+                title: "League Deleted",
+                description: `League "${league.name || 'N/A'}" has been successfully deleted.`,
                 variant: "default",
             });
 
-            // Redirect to leagues page
+            // Invalidate relevant queries *before* navigating
+            await queryClient.invalidateQueries({ queryKey: ['leagues'] }); // Refreshes league lists
+            await queryClient.invalidateQueries({ queryKey: ['league', league.id] }); // Removes specific league cache
+
             router.push("/leagues/weekly");
-            router.refresh();
+            router.refresh(); // Optional: force refresh server components if needed
+
         } catch (error: any) {
+            console.error("Error deleting league:", error);
             toast({
-                title: "Error",
-                description: error.message || "Failed to delete league",
+                title: "Deletion Error",
+                description: error.message || "An unexpected error occurred while deleting.",
                 variant: "destructive",
             });
         } finally {
@@ -258,14 +102,15 @@ export default function AdminLeagueActions({ league, isAdmin }: AdminLeagueActio
 
     return (
         <div className="flex items-center space-x-2">
+            {/* Edit Button Logic (remains the same, uses league.status) */}
             <Button
                 onClick={handleEdit}
                 disabled={!canEdit}
                 variant="outline"
                 size="sm"
                 className={`flex items-center ${canEdit
-                        ? "text-amber-400 border-amber-600/30 hover:text-amber-300 hover:border-amber-500/50 hover:bg-amber-950/30"
-                        : "text-gray-500 border-gray-700 cursor-not-allowed"
+                    ? "text-amber-400 border-amber-600/30 hover:text-amber-300 hover:border-amber-500/50 hover:bg-amber-950/30"
+                    : "text-gray-500 border-gray-700 cursor-not-allowed"
                     }`}
                 title={canEdit ? "Edit league" : "Cannot edit a league that has already started"}
             >
@@ -273,20 +118,21 @@ export default function AdminLeagueActions({ league, isAdmin }: AdminLeagueActio
                 Edit
             </Button>
 
+            {/* Delete Button Logic (uses league.status and currentParticipants) */}
             <Button
                 onClick={() => setIsDeleteDialogOpen(true)}
                 disabled={!canDelete}
                 variant="outline"
                 size="sm"
                 className={`flex items-center ${canDelete
-                        ? "text-red-400 border-red-600/30 hover:text-red-300 hover:border-red-500/50 hover:bg-red-950/30"
-                        : "text-gray-500 border-gray-700 cursor-not-allowed"
+                    ? "text-red-400 border-red-600/30 hover:text-red-300 hover:border-red-500/50 hover:bg-red-950/30"
+                    : "text-gray-500 border-gray-700 cursor-not-allowed"
                     }`}
                 title={
-                    league.currentParticipants > 0
+                    (league.currentParticipants ?? 0) > 0
                         ? "Cannot delete a league with participants"
                         : league.status !== "upcoming"
-                            ? "Cannot delete a league that has already started"
+                            ? "Cannot delete a league that has already started or finished"
                             : "Delete league"
                 }
             >
@@ -294,7 +140,7 @@ export default function AdminLeagueActions({ league, isAdmin }: AdminLeagueActio
                 Delete
             </Button>
 
-            {/* Delete Confirmation Dialog */}
+            {/* Delete Confirmation Dialog (remains the same, uses league.name/gameweek) */}
             <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
                 <DialogContent className="bg-gray-900 border border-gray-800 text-gray-100">
                     <DialogHeader>
@@ -303,22 +149,19 @@ export default function AdminLeagueActions({ league, isAdmin }: AdminLeagueActio
                             Delete League
                         </DialogTitle>
                         <DialogDescription className="text-gray-400">
-                            Are you sure you want to delete this league? This action cannot be undone.
+                            Are you sure you want to delete league "{league.name || 'this league'}" (GW {league.gameweek})? This action cannot be undone.
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="py-4">
-                        <div className="p-4 bg-gray-800/50 rounded-lg border border-red-900/30">
-                            <h3 className="font-medium text-gray-200">{league.name}</h3>
-                            <p className="text-sm text-gray-400">Gameweek {league.gameweek}</p>
-                        </div>
-                    </div>
+                    {/* Removed redundant display inside dialog */}
+                    {/* <div className="py-4"> ... </div> */}
 
-                    <DialogFooter>
+                    <DialogFooter className="mt-4"> {/* Added margin top */}
                         <Button
                             onClick={() => setIsDeleteDialogOpen(false)}
                             variant="outline"
                             className="border-gray-700 text-gray-300 hover:bg-gray-800"
+                            disabled={isDeleting}
                         >
                             Cancel
                         </Button>

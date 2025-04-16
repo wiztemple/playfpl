@@ -5,20 +5,25 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-
-/**
- * Formats a date string for display
- */
-export function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-
-  // Format: "Jan 1, 2023"
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  }).format(date);
-}
+export const formatDate = (dateInput: Date | string | null | undefined): string => {
+  if (!dateInput) return "-";
+  // Create Date object if input is string, otherwise use the Date object directly
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+   // Check if the created date is valid
+  if (isNaN(date.getTime())) {
+      console.warn("Invalid date passed to formatDate:", dateInput);
+      return "Invalid Date";
+  }
+  try {
+      // Format the valid date
+      return new Intl.DateTimeFormat('en-US', {
+          year: 'numeric', month: 'short', day: 'numeric'
+      }).format(date);
+  } catch (error) {
+       console.error("Error formatting date:", dateInput, error);
+      return "Err Date";
+  }
+};
 
 export function formatCurrency(amount: number): string {
   // Check if amount is a valid number

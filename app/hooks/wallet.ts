@@ -1,68 +1,130 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+// hooks/wallet.ts
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { PaymentData } from "../types/wallet";
+import { useDebounce } from "./useDebounce";
+import { DepositInitiatedData, InitiateDepositVars, TransactionApiResponse, WalletBalanceResponse } from "../types/wallet";
+// --- Import necessary types ---
+// Adjust the path to your central types file as needed
 
-export function useWalletData() {
-    return useQuery({
-        queryKey: ['wallet'],
-        queryFn: async () => {
-            const response = await fetch('/api/wallet');
+// --- Hook for Fetching Wallet Balance ---
+export function useWalletBalance() {
+    const { data: session, status } = useSession();
+    return useQuery<WalletBalanceResponse>({
+        // Query key includes user ID to ensure data is specific to the user and refetches on user change
+        queryKey: ['walletBalance', session?.user?.id],
+        queryFn: async (): Promise<WalletBalanceResponse> => {
+            // Return a default state if user isn't authenticated yet
+            if (status !== 'authenticated' || !session?.user?.id) {
+                console.log("[useWalletBalance] Not authenticated or session loading, returning default.");
+                return { balance: 0, currency: 'NGN' };
+            }
+            console.log("[useWalletBalance] Fetching wallet balance...");
+            const response = await fetch('/api/wallet'); // API uses session cookie for auth
             if (!response.ok) {
-                throw new Error('Failed to fetch wallet data');
+                const errorData = await response.json().catch(() => ({}));
+                console.error(`[useWalletBalance] API Error ${response.status}:`, errorData);
+                throw new Error(errorData.error || 'Failed to fetch wallet balance');
             }
             const data = await response.json();
-
-            // Validate the data to make sure amounts are reasonable
-            if (data.balance) {
-                // If the balance is unreasonably large (likely a kobo/naira mixup)
-                if (Math.abs(data.balance) > 1000000) {
-                    console.warn('Wallet balance seems unusually large, might be a unit issue');
-                    data.balance = data.balance / 100; // Convert to reasonable value as failsafe
-                }
-
-                // If balance is negative but should never be
-                if (data.balance < -10000) {
-                    console.warn('Wallet balance is extremely negative, might be an error');
-                    data.balance = Math.abs(data.balance); // Convert to positive as failsafe
-                }
-            }
-
-            // Also validate transaction amounts if present
-            if (data.transactions && Array.isArray(data.transactions)) {
-                data.transactions = data.transactions.map((tx: { id: string; amount: number }) => {
-                    if (Math.abs(tx.amount) > 1000000) {
-                        console.warn(`Transaction ${tx.id} amount seems unusually large, might be a unit issue`);
-                        tx.amount = tx.amount / 100; // Convert to reasonable value
-                    }
-                    return tx;
-                });
-            }
-
-            return data;
+            // Ensure balance is returned as a number
+            return { ...data, balance: Number(data.balance || 0) };
         },
-        refetchOnWindowFocus: false,
+        // Only run the query if the session is authenticated and user ID exists
+        enabled: status === 'authenticated' && !!session?.user?.id,
+        staleTime: 1000 * 60, // Data considered fresh for 1 minute
+        refetchOnWindowFocus: true, // Refetch when user returns to the tab
+        refetchInterval: 1000 * 60 * 5, // Optional: Refetch every 5 minutes
     });
 }
 
-export function useInitiatePayment() {
-    return useMutation({
-        mutationFn: async (paymentData: PaymentData) => {
-            const response = await fetch(`/api/payment/initiate`, {
+
+// --- Hook for Fetching Paginated/Filtered Transactions ---
+export function useTransactions(
+    page: number = 1, // Default to page 1
+    limit: number = 10, // Default items per page
+    filterType: string | null = null, // Optional filter by type (e.g., 'DEPOSIT')
+    // filterStatus: string | null = null, // Optional filter by status (e.g., 'PENDING')
+    searchTerm: string = '' // Optional search term
+) {
+    const { data: session, status } = useSession();
+    // Debounce the search term to avoid API calls on every keystroke
+    const [debouncedSearchTerm] = useDebounce(searchTerm, 400);
+
+    // Query key includes all parameters that affect the query result
+    const queryKey = ['transactions', page, limit, filterType, /*filterStatus,*/ debouncedSearchTerm, session?.user?.id];
+
+    // Define the default structure for placeholder data and initial state
+    const defaultResponse: TransactionApiResponse = {
+        transactions: [], totalCount: 0, totalPages: 0, currentPage: page, limit: limit
+    };
+
+    return useQuery<TransactionApiResponse>({
+        queryKey: queryKey,
+        queryFn: async (): Promise<TransactionApiResponse> => {
+            if (status !== 'authenticated' || !session?.user?.id) {
+                console.log("[useTransactions] Not authenticated or session loading, returning default.");
+                return defaultResponse;
+            }
+            console.log(`[useTransactions] Fetching page ${page}, limit ${limit}, type ${filterType}, search '${debouncedSearchTerm}'`);
+
+            // Construct query parameters
+            const params = new URLSearchParams();
+            params.set('page', page.toString());
+            params.set('limit', limit.toString());
+            if (filterType) params.set('type', filterType);
+            // if (filterStatus) params.set('status', filterStatus);
+            if (debouncedSearchTerm) params.set('search', debouncedSearchTerm);
+
+            const response = await fetch(`/api/wallet/transactions?${params.toString()}`);
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                console.error(`[useTransactions] API Error ${response.status}:`, errorData);
+                throw new Error(errorData.error || 'Failed to fetch transactions');
+            }
+            // Assume API returns data matching TransactionApiResponse (with string amounts/dates)
+            return response.json();
+        },
+        // Only run the query if authenticated and user ID exists
+        enabled: status === 'authenticated' && !!session?.user?.id,
+        // Keep previous data while loading the next page/filter for smoother UX
+        placeholderData: (prevData) => prevData ?? defaultResponse,
+        staleTime: 1000 * 15, // Data considered fresh for 15 seconds
+    });
+}
+
+
+// --- Hook for Initiating Manual Deposit ---
+export function useInitiateDeposit() {
+    const queryClient = useQueryClient();
+
+    return useMutation<DepositInitiatedData, Error, InitiateDepositVars>({
+        mutationFn: async (depositData: InitiateDepositVars): Promise<DepositInitiatedData> => {
+            console.log("[INITIATE_DEPOSIT_MUTATION] Calling API with amount:", depositData.amount);
+            const response = await fetch(`/api/wallet/deposit/initiate`, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(paymentData),
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(depositData), // Sends { amount: number }
             });
 
             const data = await response.json();
             if (!response.ok) {
-                throw new Error(data.error || "Failed to initiate payment");
+                console.error("[INITIATE_DEPOSIT_MUTATION] API Error:", data);
+                throw new Error(data.error || "Failed to initiate deposit");
             }
-            return data;
+            console.log("[INITIATE_DEPOSIT_MUTATION] API Success:", data);
+            // Expecting API to return DepositInitiatedData structure
+            return data as DepositInitiatedData;
+        },
+        onSuccess: (data) => {
+            // Toast notification handled in the component where mutation is used usually
+            console.log(`Deposit initiated successfully: TxID ${data.transactionId}, Ref ${data.referenceCode}`);
+            // Invalidate transaction history so the new PENDING transaction appears
+            queryClient.invalidateQueries({ queryKey: ['transactions'] });
         },
         onError: (error: Error) => {
-            toast.error("Payment initiation failed. Please try again.");
+            console.error("[INITIATE_DEPOSIT_MUTATION] Error:", error);
+            // Toast notification handled in the component
         }
     });
 }

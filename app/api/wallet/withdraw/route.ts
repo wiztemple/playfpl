@@ -1,187 +1,113 @@
 // /app/api/wallet/withdraw/route.ts
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { z } from 'zod';
-import { prisma } from "@/lib/db";
+// This route now handles INITIATING a withdrawal request
 
-// Validation schema
-const withdrawSchema = z.object({
-    amount: z.number().positive().min(5),
-    account_number: z.string().length(10),
-    bank_code: z.string(),
-    account_name: z.string(),
-    bank_name: z.string(),
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { prisma } from "@/lib/db";
+import { authOptions } from "@/lib/auth-options"; // Adjust path if needed
+import { z } from "zod";
+import type { Session } from "next-auth";
+import { Prisma } from "@prisma/client"; // Import Prisma namespace for Decimal/types
+
+// Session type
+interface SessionWithUser extends Omit<Session, 'user'> { user?: { id?: string }; }
+
+// Zod schema for request body validation
+const withdrawalRequestSchema = z.object({
+    amount: z.number().positive("Amount must be positive").min(500, "Minimum withdrawal is NGN 500"), // Example minimum
+    bankAccountId: z.string().cuid("Valid bank account selection is required"), // Expect CUID of the UserBankAccount record
 });
 
-export async function POST(request: Request) {
+// Define return type for success
+interface WithdrawalRequestResponse {
+    success: boolean;
+    message: string;
+    transactionId: string;
+    status: string; // Return the status ('REQUIRES_APPROVAL')
+}
+
+export async function POST(request: NextRequest) {
+    console.log("[API /wallet/withdraw] POST request received (Initiate Withdrawal).");
     try {
-        const session = await getServerSession(authOptions);
+        // 1. Authentication
+        const session = await getServerSession(authOptions as any) as SessionWithUser;
+        const userId = session?.user?.id;
+        if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        console.log(`[API /wallet/withdraw] User ID: ${userId}`);
 
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
+        // 2. Input Validation
+        let requestBody;
+        try { requestBody = await request.json(); }
+        catch (e) { return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }); }
 
-        // Validate request body
-        const body = await request.json();
-        const validationResult = withdrawSchema.safeParse(body);
-
+        const validationResult = withdrawalRequestSchema.safeParse(requestBody);
         if (!validationResult.success) {
-            return NextResponse.json(
-                {
-                    error: "Invalid request data",
-                    details: validationResult.error.format(),
-                },
-                { status: 400 }
-            );
+            console.warn("[API /wallet/withdraw] Validation failed:", validationResult.error.format());
+            return NextResponse.json({ error: "Invalid input data.", details: validationResult.error.format() }, { status: 400 });
         }
+        const { amount, bankAccountId } = validationResult.data;
+        const withdrawalAmountDecimal = new Prisma.Decimal(amount.toFixed(2));
+        console.log(`[API /wallet/withdraw] Validated amount: ${withdrawalAmountDecimal}, Bank Account ID: ${bankAccountId}`);
 
-        const { amount, account_number, bank_code, account_name, bank_name } = validationResult.data;
+        // 3. Fetch Wallet and Selected Bank Account concurrently
+        const [wallet, selectedBankAccount] = await Promise.all([
+            prisma.wallet.findUnique({ where: { userId } }),
+            prisma.userBankAccount.findUnique({ where: { id: bankAccountId } }) // Find account by its unique ID
+        ]);
 
-        // Get user wallet
-        const wallet = await prisma.wallet.findUnique({
-            where: { userId: session.user.id },
-        });
-
-        if (!wallet) {
-            return NextResponse.json({ error: "Wallet not found" }, { status: 404 });
+        // 4. Validation
+        if (!wallet) return NextResponse.json({ error: "Wallet not found" }, { status: 404 });
+        if (!selectedBankAccount) return NextResponse.json({ error: "Selected bank account not found" }, { status: 404 });
+        // **Crucially, verify ownership:** Ensure the selected bank account belongs to the logged-in user
+        if (selectedBankAccount.userId !== userId) {
+            console.warn(`[API /wallet/withdraw] User ${userId} attempted withdraw to account ${bankAccountId} owned by ${selectedBankAccount.userId}.`);
+            return NextResponse.json({ error: "Invalid bank account selection" }, { status: 403 }); // Forbidden
         }
-
-        // Check if user has enough balance
-        if (wallet.balance < amount) {
-            return NextResponse.json({ error: "Insufficient balance" }, { status: 400 });
+        // Check balance (using Decimal comparison)
+        if (wallet.balance.comparedTo(withdrawalAmountDecimal) < 0) { // balance < amount
+            console.warn(`[API /wallet/withdraw] Insufficient balance for user ${userId}. Balance: ${wallet.balance}, Requested: ${withdrawalAmountDecimal}`);
+            return NextResponse.json({ error: "Insufficient wallet balance." }, { status: 400 });
         }
+        console.log(`[API /wallet/withdraw] Validation passed.`);
 
-        // Generate a reference code
-        const reference = `fpl_withdraw_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
-
-        // For production: Create a recipient on Paystack
-        let recipientData = { status: true, data: { recipient_code: 'DEMO_RECIPIENT' } };
-        let transferData = { status: true };
-
-        // Only call Paystack in production
-        if (process.env.NODE_ENV === 'production') {
-            // Create a recipient on Paystack
-            const createRecipientResponse = await fetch('https://api.paystack.co/transferrecipient', {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    type: 'nuban',
-                    name: account_name,
-                    account_number,
-                    bank_code,
-                    currency: 'NGN'
-                })
-            });
-
-            recipientData = await createRecipientResponse.json();
-
-            if (!recipientData.status) {
-                return NextResponse.json({ error: "Failed to create recipient" }, { status: 400 });
-            }
-
-            const recipient_code = recipientData.data.recipient_code;
-
-            // Initiate transfer
-            const transferResponse = await fetch('https://api.paystack.co/transfer', {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    source: 'balance',
-                    amount: Math.round(amount * 100), // Convert to kobo FOR PAYSTACK ONLY
-                    recipient: recipient_code,
-                    reason: `Withdrawal to ${account_name} (${bank_name})`,
-                    reference
-                })
-            });
-
-            transferData = await transferResponse.json();
-        }
-
-        // Store amount as negative for withdrawals (stored as naira, not kobo)
-        const withdrawalAmount = -Math.abs(amount); // Ensure negative amount for withdrawals
-
-        // Create transaction and update wallet in a transaction
-        await prisma.$transaction(async (tx) => {
-            // Create transaction record
-            await tx.transaction.create({
-                data: {
-                    userId: session.user.id,
-                    walletId: wallet.id,
-                    type: "withdrawal",
-                    amount: withdrawalAmount, // Store as negative naira (NOT kobo)
-                    currency: "NGN",
-                    status: transferData.status ? "pending" : "failed",
-                    externalReference: reference,
-                    description: `Withdrawal of ₦${Math.abs(amount)} to ${account_name} (${bank_name})`,
-                    metadata: {
-                        account_number,
-                        bank_code,
-                        account_name,
-                        bank_name,
-                        recipient_code: recipientData.data.recipient_code
-                    }
-                },
-            });
-
-            // Update wallet balance
-            if (transferData.status) {
-                await tx.wallet.update({
-                    where: { id: wallet.id },
-                    data: {
-                        balance: {
-                            decrement: Math.abs(amount) // Decrement by naira amount (NOT kobo)
-                        }
-                    }
-                });
-            }
-        });
-
-        if (!transferData.status) {
-            return NextResponse.json(
-                { error: "Transfer failed" },
-                { status: 400 }
-            );
-        }
-
-        // For demo purposes: Auto-complete withdrawal after delay
-        if (process.env.NODE_ENV === 'development') {
-            setTimeout(async () => {
-                try {
-                    // Update the transaction status
-                    await prisma.transaction.updateMany({
-                        where: {
-                            externalReference: reference,
-                            status: "pending"
-                        },
-                        data: {
-                            status: "completed"
-                        }
-                    });
-
-                    console.log(`Demo: Auto-completed withdrawal for ${Math.abs(amount)} naira`);
-                } catch (error) {
-                    console.error("Error auto-completing withdrawal:", error);
+        // 5. Create PENDING/APPROVAL Withdrawal Transaction
+        // **DO NOT DECREMENT BALANCE HERE** - Admin does that upon approval
+        const newTransaction = await prisma.transaction.create({
+            data: {
+                userId: userId,
+                walletId: wallet.id,
+                type: 'WITHDRAWAL',          // Use string value (or Enum if you switched back)
+                status: 'REQUIRES_APPROVAL', // Initial status needing admin action
+                amount: withdrawalAmountDecimal, // Store positive amount requested
+                currency: wallet.currency,
+                description: `Withdrawal Request: ${selectedBankAccount.bankName} - ****${selectedBankAccount.accountNumber.slice(-4)}`,
+                // Store necessary details for admin payout in metadata
+                metadata: {
+                    bankAccountId: selectedBankAccount.id,
+                    accountName: selectedBankAccount.accountName,
+                    accountNumber: selectedBankAccount.accountNumber, // Store full number for admin
+                    bankName: selectedBankAccount.bankName,
+                    bankCode: selectedBankAccount.bankCode,
                 }
-            }, 3000);
-        }
-
-        return NextResponse.json({
-            success: true,
-            message: "Withdrawal initiated successfully",
-            reference
+            }
         });
+        console.log(`[API /wallet/withdraw] Withdrawal request transaction created (Requires Approval): ${newTransaction.id}`);
+
+        // 6. Return Success (Request Submitted)
+        const responsePayload: WithdrawalRequestResponse = {
+            success: true,
+            message: "Withdrawal requested successfully. Awaiting approval.",
+            transactionId: newTransaction.id,
+            status: newTransaction.status // Return current status
+        };
+        return NextResponse.json(responsePayload, { status: 201 }); // Use 201 for resource creation
+
     } catch (error) {
-        console.error("Error processing withdrawal:", error);
-        return NextResponse.json(
-            { error: "Failed to process withdrawal" },
-            { status: 500 }
-        );
+        console.error("[API /wallet/withdraw] Error processing withdrawal request:", error);
+        if (error instanceof Prisma.PrismaClientKnownRequestError) {
+            console.error(`[API /wallet/withdraw] Prisma Error Code: ${error.code}`, error.meta);
+            return NextResponse.json({ error: "Database error processing request." }, { status: 500 });
+        }
+        return NextResponse.json({ error: "Failed to request withdrawal.", details: error instanceof Error ? error.message : "Unknown server error." }, { status: 500 });
     }
 }

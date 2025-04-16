@@ -1,155 +1,127 @@
-// /app/api/leagues/weekly/create/route.ts
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+// app/api/leagues/weekly/create/route.ts
+
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/db";
-import { getGameweekInfo } from "@/lib/fpl-api";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Adjust path if needed
 import { z } from "zod";
-import { authOptions } from "@/lib/auth-options";
+import { Prisma } from "@prisma/client";
+import type { Session } from "next-auth";
+import { calculateEndDate } from "@/lib/fpl-api";
 
-const createLeagueSchema = z.object({
-  name: z
-    .string()
-    .min(3, "Name must be at least 3 characters")
-    .max(100, "Name cannot exceed 100 characters"),
-  gameweek: z
-    .number()
-    .int()
-    .positive("Gameweek must be a positive number")
-    .max(38, "Maximum gameweek is 38"),
-  entryFee: z
-    .number()
-    .positive("Entry fee must be positive")
-    .max(20000, "Maximum entry fee is ₦20,000"),
-  maxParticipants: z
-    .number()
-    .int()
-    .positive("Must allow at least 1 participant")
-    .max(10000, "Maximum 10,000 participants"),
-  startDate: z.string().datetime("Invalid start date format"),
-  leagueType: z.enum(['tri', 'duo', 'jackpot']),
-  prizeDistribution: z.array(
-    z.object({
-      position: z.number().int().positive("Position must be a positive number"),
-      percentageShare: z.number().positive("Percentage must be positive"),
-    })
-  )
-}).superRefine((data, ctx) => {
-  // Validate total percentage
-  const total = data.prizeDistribution.reduce(
-    (sum, prize) => sum + prize.percentageShare,
-    0
-  );
-  if (Math.abs(total - 100) >= 0.01) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Prize distribution must total 100%",
-      path: ["prizeDistribution"]
-    });
-  }
+// --- Type Definitions ---
+interface SessionWithAdmin extends Omit<Session, 'user'> {
+    user?: { id?: string; isAdmin?: boolean; };
+}
 
-  // Validate number of positions
-  const expectedPositions = data.leagueType === 'tri' ? 3
-    : data.leagueType === 'duo' ? 2
-      : 1;
-
-  if (data.prizeDistribution.length !== expectedPositions) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: `Prize distribution must have ${expectedPositions} positions for ${data.leagueType} league type`,
-      path: ["prizeDistribution"]
-    });
-  }
+const prizeDistributionSchema = z.object({
+    position: z.number().int().positive(),
+    percentageShare: z.number().positive().max(100),
 });
 
-export async function POST(request: Request) {
-  try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
+const createLeagueSchema = z.object({
+    name: z.string().min(3, "League name must be at least 3 characters").max(100, "League name too long"),
+    gameweek: z.number().int().min(1).max(38, "Invalid Gameweek"),
+    entryFee: z.number().positive("Entry fee must be positive").max(100000, "Entry fee seems too high"),
+    maxParticipants: z.number().int().min(2, "Minimum participants is 2").max(10000, "Maximum participants too high"),
+    startDate: z.string().datetime({ message: "Invalid start date format (ISO required)" }),
+    leagueType: z.enum(["tri", "duo", "jackpot"]),
+    prizeDistribution: z.array(prizeDistributionSchema).min(1, "At least one prize position required"),
+    description: z.string().max(500, "Description too long").optional().nullable(),
+}).refine(data => {
+    const totalPercentage = data.prizeDistribution.reduce((sum, p) => sum + p.percentageShare, 0);
+    return Math.abs(totalPercentage - 100) < 0.01;
+}, { message: "Prize percentages must add up to 100%", path: ["prizeDistribution"] });
 
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "You must be signed in to create a league" },
-        { status: 401 }
-      );
-    }
-
-    // Parse and validate request body
-    const body = await request.json();
-
-    const validationResult = createLeagueSchema.safeParse(body);
-
-    if (!validationResult.success) {
-      return NextResponse.json(
-        {
-          error: "Invalid league data",
-          details: validationResult.error.format(),
-        },
-        { status: 400 }
-      );
-    }
-
-    const data = validationResult.data;
-
-    // Validate gameweek exists in FPL
+// --- POST Handler ---
+export async function POST(request: NextRequest) {
+    console.log("[API CREATE LEAGUE] POST request received.");
     try {
-      const gameweekInfo = await getGameweekInfo(data.gameweek);
+        // 1. Authorization (Admin only)
+        const session = await getServerSession(authOptions as any) as SessionWithAdmin;
+        const adminUserId = session?.user?.id;
+        if (!adminUserId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        const adminUser = await prisma.user.findUnique({ where: { id: adminUserId }, select: { isAdmin: true } });
+        // Ensure the check for isAdmin is strict
+        if (!adminUser?.isAdmin) {
+             console.warn(`[API CREATE LEAGUE] Forbidden access attempt by user ${adminUserId}`);
+             return NextResponse.json({ error: "Forbidden: Admin privileges required" }, { status: 403 });
+        }
+        console.log(`[API CREATE LEAGUE] Authorized Admin: ${adminUserId}`);
 
-      // Use the actual gameweek deadline and end date
-      const gameweekDeadline = new Date(gameweekInfo.deadline_time);
-      const gameweekEnd = new Date(gameweekInfo.gameweek_end);
-      const startDate = new Date(data.startDate);
+        // 2. Input Validation
+        let requestBody;
+        try { requestBody = await request.json(); }
+        catch (e) { return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }); }
 
-      // Set end date to 23:59:59.999 on the same day as the last fixture (April 3rd)
-      const endDate = new Date(gameweekEnd);
-      endDate.setHours(23, 59, 59, 999); // Use local time instead of UTC
+        const validationResult = createLeagueSchema.safeParse(requestBody);
+        if (!validationResult.success) {
+            console.warn("[API CREATE LEAGUE] Validation failed:", validationResult.error.format());
+            return NextResponse.json({ error: "Invalid input data.", details: validationResult.error.format() }, { status: 400 });
+        }
+        const leagueData = validationResult.data;
+        const startDateObj = new Date(leagueData.startDate);
 
-      if (startDate > gameweekDeadline) {
-        return NextResponse.json(
-          { error: "Start date must be before the gameweek deadline" },
-          { status: 400 }
-        );
-      }
+        // Optional: Add check to ensure start date is not too far in the past/future relative to GW deadline
 
-      // Create league data with calculated end date
-      const leagueData = {
-        name: data.name,
-        gameweek: data.gameweek,
-        entryFee: data.entryFee,
-        maxParticipants: data.maxParticipants,
-        startDate: new Date(data.startDate),
-        endDate: endDate,
-        status: "upcoming",
-        platformFeePercentage: 10,
-        minParticipantsRequired: 3,
-        leagueType: data.leagueType, // Remove the type casting
-        prizeDistribution: {
-          create: data.prizeDistribution.map((prize) => ({
-            position: prize.position,
-            percentageShare: prize.percentageShare,
-          })),
-        },
-      };
+        // Calculate End Date
+        const endDateObj = await calculateEndDate(startDateObj, leagueData.gameweek);
 
-      // Create the league in the database
-      const league = await prisma.weeklyLeague.create({
-        data: leagueData,
-        include: {
-          prizeDistribution: true,
-        },
-      });
+        // 3. Database Creation (Transaction)
+        console.log(`[API CREATE LEAGUE] Creating league '${leagueData.name}' (GW${leagueData.gameweek})...`);
+        const newLeague = await prisma.$transaction(async (tx) => {
+            const createdLeague = await tx.weeklyLeague.create({
+                data: {
+                    name: leagueData.name,
+                    gameweek: leagueData.gameweek,
+                    entryFee: new Prisma.Decimal(leagueData.entryFee.toFixed(2)),
+                    maxParticipants: leagueData.maxParticipants,
+                    startDate: startDateObj,
+                    endDate: endDateObj,
+                    leagueType: leagueData.leagueType,
+                    description: leagueData.description, // Include description if provided
+                    platformFeePercentage: 10, // Default or from config
+                    minParticipantsRequired: 2, // Default or from config
+                    status: 'upcoming',
+                }
+            });
 
-      return NextResponse.json(league);
-    } catch (error: any) {
+            await tx.prizeDistribution.createMany({
+                data: leagueData.prizeDistribution.map(p => ({
+                    leagueId: createdLeague.id,
+                    position: p.position,
+                    percentageShare: new Prisma.Decimal(p.percentageShare.toFixed(2))
+                }))
+            });
 
-      return NextResponse.json(
-        { error: "Failed to create league", details: error.message },
-        { status: 500 }
-      );
+            console.log(`[API CREATE LEAGUE] League ${createdLeague.id} and prize distribution created.`);
+            // Fetch again to include the relation in the returned object
+             const leagueWithPrizes = await tx.weeklyLeague.findUniqueOrThrow({
+                 where: { id: createdLeague.id },
+                 include: { prizeDistribution: { orderBy: { position: 'asc' } } }
+             });
+            return leagueWithPrizes;
+
+        }, { timeout: 10000 }); // 10s timeout for creation
+
+        // 4. Return Success Response
+        console.log(`[API CREATE LEAGUE] Successfully created league ${newLeague.id}.`);
+        // Convert Decimal fields to string/number for JSON safety if necessary, though Prisma handles most serialization
+        const responseLeague = {
+            ...newLeague,
+            entryFee: newLeague.entryFee.toNumber(), // Example conversion
+            prizeDistribution: newLeague.prizeDistribution.map(pd => ({
+                ...pd,
+                percentageShare: pd.percentageShare.toNumber() // Example conversion
+            }))
+        };
+        return NextResponse.json(responseLeague, { status: 201 });
+
+    } catch (error) {
+        console.error("[API CREATE LEAGUE] Error:", error);
+         if (error instanceof Prisma.PrismaClientKnownRequestError) { /* ... */ return NextResponse.json({ error: "Database error.", details: error.message }, { status: 500 });}
+        return NextResponse.json({ error: "Failed to create league.", details: error instanceof Error ? error.message : "Unknown server error." }, { status: 500 });
     }
-  } catch (error) {
-    return NextResponse.json(
-      { error: "Invalid gameweek or error fetching gameweek data" },
-      { status: 400 }
-    );
-  }
 }
+
+// Note: If you only export POST, GET requests to this route will correctly result in 405 Method Not Allowed.

@@ -15,14 +15,6 @@ interface UserProfile {
   createdAt: string;
 }
 
-interface UserStats {
-  totalLeaguesJoined: number;
-  totalWinnings: number;
-  highestRank: number | null;
-  averageRank: number | null;
-  winRate: number;
-}
-
 // Hook to fetch user profile data
 export function useUserProfile() {
   const { data: session } = useSession();
@@ -137,6 +129,7 @@ export function useUserLeagues() {
 // Add these imports if they don't exist
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { UserLeague } from "../types";
+import { UserStats } from "../types/user";
 
 // Fetch wallet data
 export function useWalletData() {
