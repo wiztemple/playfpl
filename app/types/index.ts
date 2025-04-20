@@ -1,6 +1,6 @@
 import type { DefaultSession, DefaultUser } from "next-auth";
 import type { JWT as DefaultJWT } from "next-auth/jwt";
-import type { WeeklyLeague as WeeklyLeaguePrisma } from '@prisma/client';
+import type { WeeklyLeague as WeeklyLeaguePrisma } from "@prisma/client";
 export interface PrizeDistribution {
   id: string;
   leagueId: string;
@@ -23,7 +23,7 @@ export interface WeeklyLeague {
   entryFee: number;
   maxParticipants: number;
   currentParticipants: number;
-  status: 'upcoming' | 'active' | 'completed' | 'cancelled';
+  status: "upcoming" | "active" | "completed" | "cancelled";
   startDate: string;
   endDate: string;
   platformFeePercentage: number;
@@ -31,7 +31,7 @@ export interface WeeklyLeague {
   tiebreaker: string;
   createdAt: string;
   updatedAt: string;
-  leagueType: 'tri' | 'duo' | 'jackpot';
+  leagueType: "tri" | "duo" | "jackpot";
   prizeDistribution: PrizeDistribution[];
   myResults?: MyResults;
   hasJoined?: boolean;
@@ -126,10 +126,10 @@ export interface Transaction {
   id: string;
   userId: string;
   walletId: string;
-  type: 'deposit' | 'withdrawal' | 'entry_fee' | 'winnings' | 'refund';
+  type: "deposit" | "withdrawal" | "entry_fee" | "winnings" | "refund";
   amount: number;
   currency: string;
-  status: 'pending' | 'completed' | 'failed';
+  status: "pending" | "completed" | "failed";
   externalReference?: string;
   createdAt: string;
   updatedAt: string;
@@ -153,7 +153,7 @@ declare module "next-auth" {
    */
   interface Session {
     user: {
-      id: string;       // Add user ID
+      id: string; // Add user ID
       isAdmin: boolean; // <<< ADDED isAdmin HERE
     } & DefaultSession["user"]; // Keep default fields (name, email, image)
   }
@@ -304,26 +304,29 @@ export interface MyLeagueInfo {
   maxParticipants: number;
   currentParticipants: number;
   startDate: string; // API sends as ISO string
-  endDate: string;   // API sends as ISO string
-  status: string;    // 'upcoming', 'active', 'completed', etc.
+  endDate: string; // API sends as ISO string
+  status: string; // 'upcoming', 'active', 'completed', etc.
   leagueType: string;
   description?: string | null;
   currentHighestGwPoints?: number | null;
   platformFeePercentage: number;
-  prizeDistribution: { // Ensure API includes this structure
-      id: string;
-      position: number;
-      percentageShare: number; // API sends as number after conversion
-      leagueId: string;
+  prizeDistribution: {
+    // Ensure API includes this structure
+    id: string;
+    position: number;
+    percentageShare: number; // API sends as number after conversion
+    leagueId: string;
   }[];
+  userName: string | null;    // From user.name
+  teamName: string | null;
   // User-specific fields added by the API
   userRank: number | null;
   myResults: {
-      rank: number | null;
-      points: number | null;
-      weeklyPoints: number | null;
-      winnings: number; // API sends as number after conversion
-      payoutStatus: string | null;
+    rank: number | null;
+    points: number | null;
+    weeklyPoints: number | null;
+    winnings: number; // API sends as number after conversion
+    payoutStatus: string | null;
   } | null; // Make myResults potentially null
   hasJoined: boolean;
   minParticipantsRequired: number; // Added from error message
@@ -331,6 +334,7 @@ export interface MyLeagueInfo {
   createdAt: string; // Added from error message - API should return ISO string
   updatedAt: string; //
 }
+
 export interface PrizeDistributionInfo {
   id: string;
   position: number;
@@ -348,7 +352,7 @@ export interface LeagueCardData {
   currentParticipants: number; // Added by API from _count
   status: string; // 'upcoming', 'active', 'completed', etc.
   startDate: string; // API returns as ISO string
-  endDate: string;   // API returns as ISO string
+  endDate: string; // API returns as ISO string
   platformFeePercentage: number; // API returns as number (or Float)
   leagueType: string;
   description?: string | null;
@@ -358,11 +362,11 @@ export interface LeagueCardData {
   // User-specific fields (added by API for 'my-leagues' filter, null/false otherwise)
   userRank?: number | null;
   myResults?: {
-      rank: number | null;
-      points: number | null; // FPL points can be null
-      weeklyPoints: number | null;
-      winnings: number; // API returns as number
-      payoutStatus: string | null;
+    rank: number | null;
+    points: number | null; // FPL points can be null
+    weeklyPoints: number | null;
+    winnings: number; // API returns as number
+    payoutStatus: string | null;
   } | null;
   hasJoined?: boolean; // Indicates if the current user has joined
 }

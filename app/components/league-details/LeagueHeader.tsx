@@ -246,18 +246,22 @@ export default function LeagueHeader({
 
     // Calculate prize pool - ensure fields exist on LeagueWithUserStatus
     const calculatePrizePool = () => {
-         if (league?.currentParticipants == null || league?.entryFee == null || league?.platformFeePercentage == null) {
-            console.warn("Missing data for prize pool calculation in header", league);
+        if (league?.currentParticipants == null || league?.entryFee == null || league?.platformFeePercentage == null) {
+           return 0;
+       }
+       const totalEntries = league.currentParticipants;
+       // --- FIX: league.entryFee is already a number from API ---
+       const entryFeeNumber = league.entryFee;
+       // --- END FIX ---
+       // Safety check if it's somehow not a number at runtime
+       if (typeof entryFeeNumber !== 'number' || isNaN(entryFeeNumber)) {
+            console.warn("LeagueHeader: entryFee is not a valid number", league.entryFee);
             return 0;
         }
-        const totalEntries = league.currentParticipants;
-        // Convert Decimal entryFee to number before multiplication
-        const entryFeeNumber = league.entryFee.toNumber();
-        const totalPool = totalEntries * entryFeeNumber; // Use the converted number
-        const platformFee = totalPool * (league.platformFeePercentage / 100);
-        // Math.max and subtraction work fine with numbers
-        return Math.max(0, totalPool - platformFee);
-    };
+       const totalPool = totalEntries * entryFeeNumber;
+       const platformFee = totalPool * (league.platformFeePercentage / 100);
+       return Math.max(0, totalPool - platformFee);
+   };
 
     const prizePool = calculatePrizePool();
 

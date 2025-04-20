@@ -3,9 +3,19 @@
 import { useRouter, useParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/app/components/ui/tabs";
 import { Button } from "@/app/components/ui/button";
-import { useLeague, useGameweekInfo, useLeaderboard, useLeagueJoinability } from "@/app/hooks/leagues";
+import {
+  useLeague,
+  useGameweekInfo,
+  useLeaderboard,
+  useLeagueJoinability,
+} from "@/app/hooks/leagues";
 import { useDeadlineCheck } from "@/app/hooks/leagues/useDeadlineCheck";
 import Loading from "@/app/components/shared/Loading";
 import LeagueHeader from "@/app/components/league-details/LeagueHeader";
@@ -27,13 +37,11 @@ export default function LeagueDetailsPage() {
     data: league,
     isLoading: leagueLoading,
     error: leagueError,
-    refetch: refetchLeague
+    refetch: refetchLeague,
   } = useLeague(leagueId);
 
   // Fetch gameweek info
-  const {
-    data: gameweekInfo,
-  } = useGameweekInfo(league?.gameweek);
+  const { data: gameweekInfo } = useGameweekInfo(league?.gameweek);
 
   // Check if deadline has passed and games are in progress
   const { isDeadlinePassed, gamesInProgress } = useDeadlineCheck(
@@ -42,17 +50,21 @@ export default function LeagueDetailsPage() {
   );
 
   // Check if joining is disabled
-  const { isJoinDisabled, minutesUntilFirstKickoff } = useLeagueJoinability(league?.gameweek);
+  const { isJoinDisabled, minutesUntilFirstKickoff } = useLeagueJoinability(
+    league?.gameweek
+  );
 
   // Determine the effective league status - if deadline has passed for an upcoming league, treat it as active
   const effectiveLeagueStatus =
-    (league?.status === "upcoming" && isDeadlinePassed) ? "active" : league?.status;
+    league?.status === "upcoming" && isDeadlinePassed
+      ? "active"
+      : league?.status;
 
   // Fetch leaderboard with our improved hook and the effective status
   const {
     data: leaderboard = [],
     refetch: refetchLeaderboard,
-    isLoading: leaderboardLoading
+    isLoading: leaderboardLoading,
   } = useLeaderboard(leagueId, effectiveLeagueStatus);
 
   // Extract winners when leaderboard changes or when league is completed
@@ -61,7 +73,10 @@ export default function LeagueDetailsPage() {
       // Extract winners (those with winnings > 0)
       const extractedWinners = leaderboard
         .filter((entry: { winnings?: number }) => (entry.winnings || 0) > 0)
-        .sort((a: { rank?: number }, b: { rank?: number }) => (a.rank || 0) - (b.rank || 0));
+        .sort(
+          (a: { rank?: number }, b: { rank?: number }) =>
+            (a.rank || 0) - (b.rank || 0)
+        );
 
       setWinners(extractedWinners);
 
@@ -70,7 +85,7 @@ export default function LeagueDetailsPage() {
       const hasSeenWinners = sessionStorage.getItem(`seen-winners-${leagueId}`);
       if (!hasSeenWinners && extractedWinners.length > 0) {
         setShowWinners(true);
-        sessionStorage.setItem(`seen-winners-${leagueId}`, 'true');
+        sessionStorage.setItem(`seen-winners-${leagueId}`, "true");
       }
     }
   }, [leaderboard, league?.status, leagueId]);
@@ -83,8 +98,13 @@ export default function LeagueDetailsPage() {
     }
 
     // Refetch leaderboard when in overview tab and league is active or effectively active
-    if (activeTab === "overview" && (league?.status === "active" || effectiveLeagueStatus === "active")) {
-      console.log(`Forcing leaderboard refresh for ${effectiveLeagueStatus} league`);
+    if (
+      activeTab === "overview" &&
+      (league?.status === "active" || effectiveLeagueStatus === "active")
+    ) {
+      console.log(
+        `Forcing leaderboard refresh for ${effectiveLeagueStatus} league`
+      );
       refetchLeaderboard();
 
       // Set up interval to refetch during games
@@ -97,18 +117,29 @@ export default function LeagueDetailsPage() {
         return () => clearInterval(intervalId);
       }
     }
-  }, [activeTab, league?.status, effectiveLeagueStatus, isDeadlinePassed, gamesInProgress, refetchLeaderboard, refetchLeague]);
+  }, [
+    activeTab,
+    league?.status,
+    effectiveLeagueStatus,
+    isDeadlinePassed,
+    gamesInProgress,
+    refetchLeaderboard,
+    refetchLeague,
+  ]);
 
   // // Calculate prize pool
   // const prizePool = league
   //   ? league.entryFee * league.currentParticipants * (1 - (league.platformFeePercentage || 5) / 100)
   //   : 0;
   // Calculate prize pool
-  const prizePool = (league && league.entryFee != null && league.currentParticipants != null) // Check required values exist
-    // --- FIX: Explicitly convert entryFee to number ---
-    ? Number(league.entryFee) * league.currentParticipants * (1 - (league.platformFeePercentage || 10) / 100) // Use Number() for conversion
-    // --- END FIX ---
-    : 0; // Default to 0 if league or necessary fields are missing
+  const prizePool =
+    league && league.entryFee != null && league.currentParticipants != null // Check required values exist
+      ? // --- FIX: Explicitly convert entryFee to number ---
+        Number(league.entryFee) *
+        league.currentParticipants *
+        (1 - (league.platformFeePercentage || 10) / 100) // Use Number() for conversion
+      : // --- END FIX ---
+        0; // Default to 0 if league or necessary fields are missing
 
   // Handle joining a league
   const handleJoinLeague = () => {
@@ -131,8 +162,10 @@ export default function LeagueDetailsPage() {
     return (
       <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-400 mb-4">League not found</h1>
-          <Button onClick={() => router.push('/leagues/weekly')}>
+          <h1 className="text-2xl font-bold text-red-400 mb-4">
+            League not found
+          </h1>
+          <Button onClick={() => router.push("/leagues/weekly")}>
             Back to Leagues
           </Button>
         </div>
@@ -181,14 +214,16 @@ export default function LeagueDetailsPage() {
           <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/10 to-purple-900/10 rounded-xl pointer-events-none"></div>
 
           {/* Show loading indicator when refreshing leaderboard during games */}
-          {gamesInProgress && leaderboardLoading && activeTab === "overview" && (
-            <div className="absolute top-2 right-2 z-20">
-              <div className="flex items-center bg-indigo-900/50 text-indigo-200 text-xs px-2 py-1 rounded-full">
-                <Loading className="h-3 w-3 mr-1" />
-                <span>Updating scores...</span>
+          {gamesInProgress &&
+            leaderboardLoading &&
+            activeTab === "overview" && (
+              <div className="absolute top-2 right-2 z-20">
+                <div className="flex items-center bg-indigo-900/50 text-indigo-200 text-xs px-2 py-1 rounded-full">
+                  <Loading className="h-3 w-3 mr-1" />
+                  <span>Updating scores...</span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
           <Tabs
             defaultValue="overview"
@@ -220,10 +255,11 @@ export default function LeagueDetailsPage() {
 
               {league.status === "upcoming" && !league.hasJoined && (
                 <Button
-                  className={`text-white bg-gradient-to-r ${isJoinDisabled
-                    ? "from-gray-500 to-gray-600 cursor-not-allowed opacity-70"
-                    : "from-orange-500 to-red-500 hover:from-indigo-600 hover:to-purple-600"
-                    } border-0 shadow-lg hidden md:flex`}
+                  className={`text-white bg-gradient-to-r ${
+                    isJoinDisabled
+                      ? "from-gray-500 to-gray-600 cursor-not-allowed opacity-70"
+                      : "from-orange-500 to-red-500 hover:from-indigo-600 hover:to-purple-600"
+                  } border-0 shadow-lg hidden md:flex`}
                   onClick={handleJoinLeague}
                   disabled={isJoinDisabled}
                 >
@@ -239,7 +275,7 @@ export default function LeagueDetailsPage() {
                 prizePool={prizePool}
                 isJoinDisabled={isJoinDisabled}
                 minutesUntilFirstKickoff={minutesUntilFirstKickoff}
-              // leaderboard={leaderboard}
+                // leaderboard={leaderboard}
               />
             </TabsContent>
 

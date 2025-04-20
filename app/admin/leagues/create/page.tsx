@@ -1,10 +1,19 @@
-// /app/leagues/weekly/create/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useActionState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Info, AlertTriangle, Sparkles, Trophy, Users, Calendar, ShieldAlert } from "lucide-react";
+import {
+  ChevronLeft,
+  Info,
+  AlertTriangle,
+  Sparkles,
+  Trophy,
+  Users,
+  Calendar,
+  ShieldAlert,
+  Loader2,
+} from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import {
   Card,
@@ -16,9 +25,21 @@ import {
 } from "@/app/components/ui/card";
 import { Label } from "@/app/components/ui/label";
 import { Input } from "@/app/components/ui/input";
-import { formatCurrency, getPositionSuffix } from "@/lib/utils";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
+import { getPositionSuffix } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/app/components/ui/select";
 import { motion } from "framer-motion";
+import { useFormStatus } from "react-dom";
+import {
+  createLeagueAction,
+  CreateLeagueActionState,
+} from "@/app/actions/leagueActions";
+import { toast } from "sonner";
 
 interface GameweekData {
   id: number;
@@ -36,11 +57,36 @@ interface GameweekInfo {
   error: string | null;
 }
 
+function SubmitButton() {
+  const { pending } = useFormStatus(); // Hook to get pending state from form action
+  return (
+    <Button
+      type="submit" // Keep as submit for form action
+      disabled={pending}
+      aria-disabled={pending}
+      className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 border-0 w-[160px]" // Adjusted width
+    >
+      {pending ? (
+        <div className="flex items-center justify-center">
+          {" "}
+          <Loader2 className="w-4 h-4 animate-spin mr-2" /> Creating...{" "}
+        </div>
+      ) : (
+        <div className="flex items-center justify-center">
+          {" "}
+          <Sparkles className="h-4 w-4 mr-2" /> Create League{" "}
+        </div>
+      )}
+    </Button>
+  );
+}
+
 export default function CreateLeaguePage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [validation, setValidation] = useState<Record<string, string>>({});
+  const [validationErrors, setValidationErrors] = useState<Record<
+    string,
+    string[] | undefined
+  > | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [adminChecking, setAdminChecking] = useState(true);
 
@@ -48,8 +94,20 @@ export default function CreateLeaguePage() {
     current: null,
     next: null,
     loading: true,
-    error: null
+    error: null,
   });
+
+  const initialState: CreateLeagueActionState = {
+    success: false,
+    message: null,
+    errors: null,
+    leagueId: null,
+  };
+
+  const [formState, formAction] = useActionState(
+    createLeagueAction,
+    initialState
+  );
 
   // Update form state
   const [formData, setFormData] = useState({
@@ -68,58 +126,56 @@ export default function CreateLeaguePage() {
 
   // Fetch current gameweek when component mounts
   useEffect(() => {
-    // Fetch current and next gameweek info
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    const hours = String(now.getHours()).padStart(2, "0");
+    const minutes = String(now.getMinutes()).padStart(2, "0");
+    const defaultDateTimeLocal = `${year}-${month}-${day}T${hours}:${minutes}`;
+    setFormData((prev) => ({ ...prev, startDate: defaultDateTimeLocal }));
+
     const fetchGameweekInfo = async () => {
       try {
-        const response = await fetch("/api/gameweek/info");
-        if (response.ok) {
-          const data = await response.json();
-
-          setGameweekInfo({
-            current: data.current,
-            next: data.next,
-            loading: false,
-            error: null
-          });
-
-          // Set the form's gameweek to the next upcoming gameweek
-          // (or current if there's no next one yet)
-          const recommendedGameweek = data.next?.id || data.current?.id || 1;
-
-          setFormData(prev => ({
-            ...prev,
-            gameweek: recommendedGameweek
-          }));
-        }
+        const res = await fetch("/api/gameweek/info");
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        const gw = data.next?.id || data.current?.id || 1;
+        setGameweekInfo({
+          current: data.current,
+          next: data.next,
+          loading: false,
+          error: null,
+        });
+        setFormData((prev) => ({ ...prev, gameweek: gw }));
       } catch (error) {
-        console.error("Error fetching gameweek info:", error);
-        setGameweekInfo(prev => ({
+        console.error("Fetch GW error:", error);
+        setGameweekInfo((prev) => ({
           ...prev,
           loading: false,
-          error: "Failed to load gameweek information"
+          error: "Failed",
         }));
       }
     };
-
-    // Set default date and fetch gameweek
-    const now = new Date();
-    setFormData((prev) => ({
-      ...prev,
-      startDate: now.toISOString().slice(0, 16), // Format: YYYY-MM-DDTHH:MM
-    }));
-
     fetchGameweekInfo();
   }, []);
 
-
-  // Add handler for league type change
-  const handleLeagueTypeChange = (value: "tri" | "duo" | "jackpot") => {
-    setFormData(prev => ({
-      ...prev,
-      leagueType: value,
-      prizeDistribution: getDefaultPrizeDistribution(value)
-    }));
-  };
+  useEffect(() => {
+    async function checkAdminStatus() {
+      /* ... fetch /api/user/admin-status logic ... */
+      try {
+        const res = await fetch("/api/user/admin-status");
+        const data = await res.json();
+        setIsAdmin(data.isAdmin);
+        if (!data.isAdmin) router.push("/leagues/weekly");
+      } catch (error) {
+        router.push("/leagues/weekly");
+      } finally {
+        setAdminChecking(false);
+      }
+    }
+    checkAdminStatus();
+  }, [router]);
 
   // Helper function to get default prize distribution
   const getDefaultPrizeDistribution = (type: "tri" | "duo" | "jackpot") => {
@@ -136,9 +192,7 @@ export default function CreateLeaguePage() {
           { position: 2, percentageShare: 40 },
         ];
       case "jackpot":
-        return [
-          { position: 1, percentageShare: 100 },
-        ];
+        return [{ position: 1, percentageShare: 100 }];
     }
   };
 
@@ -151,238 +205,72 @@ export default function CreateLeaguePage() {
     }));
   }, []);
 
+  // Handle Server Action Result (formState changes)
   useEffect(() => {
-    async function checkAdminStatus() {
-      try {
-        const response = await fetch("/api/user/admin-status");
-        const data = await response.json();
+    console.log("Form State Changed:", formState);
 
-        setIsAdmin(data.isAdmin);
+    // Check if the formState indicates a completed action
+    // (i.e., not the initial state where message/errors/fieldErrors are all null)
+    const hasActionResult =
+      formState &&
+      (formState.success === true ||
+        formState.message ||
+        formState.errors ||
+        formState.fieldErrors);
 
-        if (!data.isAdmin) {
-          router.push("/leagues/weekly");
-        }
-      } catch (error) {
-        console.error("Error checking admin status:", error);
-        router.push("/leagues/weekly");
-      } finally {
-        setAdminChecking(false);
+    if (hasActionResult) {
+      if (formState.success && formState.leagueId) {
+        // SUCCESS from action
+        toast.success("League Created!", {
+          description: formState.message || `League created successfully.`,
+        });
+        // Perform client-side redirect AFTER showing toast
+        router.push(`/leagues/weekly/${formState.leagueId}`);
+      } else if (!formState.success) {
+        // FAILURE from action
+        setValidationErrors(formState.fieldErrors ?? null); // Update validation errors state
+        // Show specific message from action, or fallback for validation errors
+        toast.error("League Creation Failed", {
+          description:
+            formState.message ||
+            "Please check the form errors highlighted below.",
+        });
       }
+    } else {
+      // This is the initial state or an empty reset state, clear client errors
+      setValidationErrors(null);
+      console.log("Ignoring initial/empty form state.");
     }
-
-    checkAdminStatus();
-  }, [router]);
+  }, [formState, router]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type } = e.target;
-
     setFormData((prev) => ({
       ...prev,
       [name]: type === "number" ? (value === "" ? "" : Number(value)) : value,
     }));
-
-    // Clear validation error for this field
-    if (validation[name]) {
-      setValidation((prev) => {
-        const newValidation = { ...prev };
-        delete newValidation[name];
-        return newValidation;
-      });
-    }
+    setValidationErrors((prev) => ({ ...prev, [name]: undefined })); // Clear validation on input change
   };
 
-  const handlePrizeDistributionChange = (index: number, value: number) => {
-    const newPrizeDistribution = [...formData.prizeDistribution];
-    newPrizeDistribution[index].percentageShare = value;
-
+  const handleLeagueTypeChange = (value: "tri" | "duo" | "jackpot") => {
     setFormData((prev) => ({
       ...prev,
-      prizeDistribution: newPrizeDistribution,
+      leagueType: value,
+      prizeDistribution: getDefaultPrizeDistribution(value),
     }));
-
-    // Clear validation error
-    if (validation["prizeDistribution"]) {
-      setValidation((prev) => {
-        const newValidation = { ...prev };
-        delete newValidation["prizeDistribution"];
-        return newValidation;
-      });
-    }
+    setValidationErrors((prev) => ({ ...prev, prizeDistribution: undefined })); // Clear prize validation
   };
-
-  const addPrizePosition = () => {
-    // Don't add more than 10 prize positions
-    if (formData.prizeDistribution.length >= 10) return;
-
-    const newPosition = formData.prizeDistribution.length + 1;
-
-    setFormData((prev) => ({
-      ...prev,
-      prizeDistribution: [
-        ...prev.prizeDistribution,
-        { position: newPosition, percentageShare: 5 },
-      ],
-    }));
-
-    // Redistribute percentages
-    adjustPrizePercentages();
+  const handleGameweekSelectChange = (value: string) => {
+    setFormData((prev) => ({ ...prev, gameweek: parseInt(value) }));
+    setValidationErrors((prev) => ({ ...prev, gameweek: undefined }));
   };
-
-  const removePrizePosition = () => {
-    // Don't remove if only 1 prize position
-    if (formData.prizeDistribution.length <= 1) return;
-
-    const newPrizeDistribution = formData.prizeDistribution.slice(0, -1);
-
-    setFormData((prev) => ({
-      ...prev,
-      prizeDistribution: newPrizeDistribution,
-    }));
-
-    // Redistribute percentages
-    adjustPrizePercentages();
-  };
-
-  const adjustPrizePercentages = () => {
-    // Ensure percentages add up to 100%
-    setTimeout(() => {
-      const total = formData.prizeDistribution.reduce(
-        (sum, prize) => sum + prize.percentageShare,
-        0
-      );
-
-      if (Math.abs(total - 100) > 0.01) {
-        // Adjust the first prize to make total 100%
-        const newPrizeDistribution = [...formData.prizeDistribution];
-        newPrizeDistribution[0].percentageShare += 100 - total;
-
-        setFormData((prev) => ({
-          ...prev,
-          prizeDistribution: newPrizeDistribution,
-        }));
-      }
-    }, 100);
-  };
-
-  // Update the validateForm function
-  const validateForm = () => {
-    const errors: Record<string, string> = {};
-
-    // Basic validation
-    if (!formData.name) errors.name = "League name is required";
-    if (!formData.gameweek) errors.gameweek = "Gameweek is required";
-    if (!formData.entryFee) errors.entryFee = "Entry fee is required";
-    if (!formData.maxParticipants)
-      errors.maxParticipants = "Max participants is required";
-    if (!formData.startDate) errors.startDate = "Start date is required";
-
-    // Gameweek validation
-    if (!formData.gameweek) {
-      errors.gameweek = "Gameweek is required";
-    } else if (gameweekInfo.current && formData.gameweek < gameweekInfo.current.id) {
-      errors.gameweek = `Cannot create a league for past gameweek ${formData.gameweek}`;
-    }
-
-
-    // Prize distribution validation based on league type
-    const expectedPositions = formData.leagueType === 'tri' ? 3
-      : formData.leagueType === 'duo' ? 2
-        : 1;
-
-    if (formData.prizeDistribution.length !== expectedPositions) {
-      errors.prizeDistribution = `Prize distribution must have ${expectedPositions} positions for ${formData.leagueType} league type`;
-    }
-
-    const total = formData.prizeDistribution.reduce(
-      (sum, prize) => sum + prize.percentageShare,
-      0
-    );
-
-    if (Math.abs(total - 100) > 0.01) {
-      errors.prizeDistribution = "Prize percentages must add up to 100%";
-    }
-
-    // Return true if no errors
-    setValidation(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Format the data for submission
-      const formattedData = {
-        name: formData.name,
-        gameweek: formData.gameweek,
-        entryFee: formData.entryFee,
-        maxParticipants: formData.maxParticipants,
-        startDate: new Date(formData.startDate).toISOString(),
-        leagueType: formData.leagueType,
-        prizeDistribution: formData.prizeDistribution,
-      };
-
-      console.log("Submitting data:", formattedData);
-
-      const response = await fetch("/api/leagues/weekly/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formattedData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error("Server validation errors:", errorData);
-
-        if (errorData?.details) {
-          const validationErrors: Record<string, string> = {};
-
-          // Handle top-level errors
-          if (errorData.details._errors?.length > 0) {
-            validationErrors.form = errorData.details._errors[0];
-          }
-
-          // Handle field-specific errors
-          Object.entries(errorData.details).forEach(([key, value]) => {
-            if (key === "_errors") return;
-            if (typeof value === 'object' && value !== null && '_errors' in value) {
-              const errors = (value as { _errors: string[] })._errors;
-              if (errors?.length > 0) {
-                validationErrors[key] = errors[0];
-              }
-            }
-          });
-
-          setValidation(validationErrors);
-          throw new Error(validationErrors.form || "Please fix the form errors and try again");
-        } else {
-          throw new Error(errorData?.error || `Server error: ${response.status}`);
-        }
-      }
-
-      const league = await response.json();
-
-      // Redirect to the new league page
-      router.push(`/leagues/weekly/${league.id}`);
-    } catch (err: any) {
-      console.error("Error creating league:", err);
-      setError(err.message || "Failed to create league. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+  const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData((prev) => ({ ...prev, startDate: e.target.value }));
+    setValidationErrors((prev) => ({ ...prev, startDate: undefined }));
   };
 
   const totalPercentage = formData.prizeDistribution
-    .reduce((sum, prize) => sum + prize.percentageShare, 0)
+    .reduce((s, p) => s + p.percentageShare, 0)
     .toFixed(1);
 
   if (adminChecking) {
@@ -432,7 +320,10 @@ export default function CreateLeaguePage() {
           className="mb-8"
         >
           <Link href="/leagues/weekly">
-            <Button variant="ghost" className="pl-0 text-gray-400 hover:text-indigo-400 hover:bg-transparent">
+            <Button
+              variant="ghost"
+              className="pl-0 text-gray-400 hover:text-indigo-400 hover:bg-transparent"
+            >
               <ChevronLeft className="mr-1 h-4 w-4" />
               Back to Leagues
             </Button>
@@ -452,7 +343,7 @@ export default function CreateLeaguePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          onSubmit={handleSubmit}
+          action={formAction}
         >
           <Card className="bg-gray-900 border border-gray-800 overflow-hidden backdrop-blur-sm relative">
             <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/10 to-purple-900/10 rounded-xl pointer-events-none"></div>
@@ -467,34 +358,52 @@ export default function CreateLeaguePage() {
             </CardHeader>
 
             <CardContent className="space-y-6 relative z-10 pt-6">
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="bg-red-900/30 border border-red-800/50 text-red-300 p-4 rounded-lg flex items-start"
-                >
-                  <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5 text-red-400" />
-                  <p>{error}</p>
-                </motion.div>
-              )}
+              <input
+                type="hidden"
+                name="gameweek"
+                value={formData.gameweek || ""}
+              />
+              <input
+                type="hidden"
+                name="leagueType"
+                value={formData.leagueType}
+              />
+              {formState?.success === false &&
+                formState.message &&
+                !formState.fieldErrors && (
+                  <div className="bg-red-900/30 border border-red-800/50 text-red-300 p-3 rounded-lg text-sm flex items-start">
+                    <AlertTriangle className="h-4 w-4 mr-2 mt-0.5" />
+                    {formState.message}
+                  </div>
+                )}
 
               <div className="space-y-2">
-                <Label htmlFor="name" className="text-gray-300">League Name</Label>
+                <Label htmlFor="name" className="text-gray-300">
+                  League Name
+                </Label>
                 <Input
                   id="name"
                   name="name"
                   value={formData.name}
                   onChange={handleInputChange}
                   placeholder="e.g., Gameweek 30 Cash League"
-                  className={`bg-gray-800/50 border-gray-700 text-gray-200 focus:border-indigo-600 focus:ring-indigo-600/20 ${validation.name ? "border-red-700 focus:border-red-700" : ""}`}
+                  className={`bg-gray-800/50 border-gray-700 text-gray-200 focus:border-indigo-600 focus:ring-indigo-600/20 ${
+                    validationErrors?.name
+                      ? "border-red-700 focus:border-red-700"
+                      : ""
+                  }`}
                 />
-                {validation.name && (
-                  <p className="text-sm text-red-400">{validation.name}</p>
+                {validationErrors?.name && (
+                  <p className="text-sm text-red-400">
+                    {validationErrors?.name[0]}
+                  </p>
                 )}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="leagueType" className="text-gray-300">League Type</Label>
+                <Label htmlFor="leagueType" className="text-gray-300">
+                  League Type
+                </Label>
                 <Select
                   value={formData.leagueType}
                   onValueChange={handleLeagueTypeChange}
@@ -503,19 +412,28 @@ export default function CreateLeaguePage() {
                     <SelectValue placeholder="Select league type" />
                   </SelectTrigger>
                   <SelectContent className="bg-gray-800 border-gray-700 text-gray-200">
-                    <SelectItem value="tri" className="focus:bg-indigo-900/50 focus:text-white">
+                    <SelectItem
+                      value="tri"
+                      className="focus:bg-indigo-900/50 focus:text-white"
+                    >
                       <div className="flex items-center">
                         <Trophy className="h-4 w-4 mr-2 text-yellow-500" />
                         <span>Top 3 Winners (50/30/20)</span>
                       </div>
                     </SelectItem>
-                    <SelectItem value="duo" className="focus:bg-indigo-900/50 focus:text-white">
+                    <SelectItem
+                      value="duo"
+                      className="focus:bg-indigo-900/50 focus:text-white"
+                    >
                       <div className="flex items-center">
                         <Trophy className="h-4 w-4 mr-2 text-indigo-400" />
                         <span>Top 2 Winners (60/40)</span>
                       </div>
                     </SelectItem>
-                    <SelectItem value="jackpot" className="focus:bg-indigo-900/50 focus:text-white">
+                    <SelectItem
+                      value="jackpot"
+                      className="focus:bg-indigo-900/50 focus:text-white"
+                    >
                       <div className="flex items-center">
                         <Trophy className="h-4 w-4 mr-2 text-purple-400" />
                         <span>Winner Takes All (100%)</span>
@@ -523,8 +441,10 @@ export default function CreateLeaguePage() {
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                {validation.leagueType && (
-                  <p className="text-sm text-red-400">{validation.leagueType}</p>
+                {validationErrors?.leagueType && (
+                  <p className="text-sm text-red-400">
+                    {validationErrors?.leagueType[0]}
+                  </p>
                 )}
               </div>
 
@@ -535,38 +455,21 @@ export default function CreateLeaguePage() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.4, delay: 0.3 }}
                 >
-                  {/* <div className="space-y-2">
-                    <Label htmlFor="gameweek" className="text-gray-300">Gameweek</Label>
-                    <div className="relative">
-                      <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-indigo-400" />
-                      <Input
-                        id="gameweek"
-                        name="gameweek"
-                        type="number"
-                        min="1"
-                        max="38"
-                        value={formData.gameweek}
-                        onChange={handleInputChange}
-                        className={`pl-10 bg-gray-800/50 border-gray-700 text-gray-200 focus:border-indigo-600 focus:ring-indigo-600/20 ${validation.gameweek ? "border-red-700 focus:border-red-700" : ""}`}
-                      />
-                    </div>
-                    {validation.gameweek && (
-                      <p className="text-sm text-red-400">{validation.gameweek}</p>
-                    )}
-                  </div> */}
                   <div className="space-y-2">
-                    <Label htmlFor="gameweek" className="text-gray-300">Gameweek</Label>
+                    <Label htmlFor="gameweek" className="text-gray-300">
+                      Gameweek
+                    </Label>
                     <div className="relative">
                       <Select
                         value={String(formData.gameweek)}
                         onValueChange={(value) => {
-                          setFormData(prev => ({
+                          setFormData((prev) => ({
                             ...prev,
-                            gameweek: parseInt(value)
+                            gameweek: parseInt(value),
                           }));
                           // Clear validation error for this field if any
-                          if (validation.gameweek) {
-                            setValidation(prev => {
+                          if (validationErrors?.gameweek) {
+                            setValidationErrors((prev) => {
                               const newValidation = { ...prev };
                               delete newValidation.gameweek;
                               return newValidation;
@@ -576,26 +479,33 @@ export default function CreateLeaguePage() {
                         disabled={gameweekInfo.loading}
                       >
                         <SelectTrigger
-                          className={`w-full pl-10 bg-gray-800/50 border-gray-700 text-gray-200 focus:border-indigo-600 focus:ring-indigo-600/20 ${validation.gameweek ? "border-red-700 focus:border-red-700" : ""}`}
+                          className={`w-full pl-10 bg-gray-800/50 border-gray-700 text-gray-200 focus:border-indigo-600 focus:ring-indigo-600/20 ${
+                            validationErrors?.gameweek
+                              ? "border-red-700 focus:border-red-700"
+                              : ""
+                          }`}
                         >
                           <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-indigo-400" />
                           <SelectValue placeholder="Select gameweek" />
                         </SelectTrigger>
                         <SelectContent className="bg-gray-800 border-gray-700 text-gray-200">
                           {gameweekInfo.loading ? (
-                            <SelectItem value="loading" disabled>Loading gameweeks...</SelectItem>
+                            <SelectItem value="loading" disabled>
+                              Loading gameweeks...
+                            </SelectItem>
                           ) : (
                             // Only show current and future gameweeks
                             Array.from({ length: 38 }, (_, i) => i + 1)
-                              .filter(gw => {
+                              .filter((gw) => {
                                 // Filter out past gameweeks
                                 const currentGw = gameweekInfo.current?.id || 1;
                                 return gw >= currentGw;
                               })
-                              .map(gw => (
+                              .map((gw) => (
                                 <SelectItem key={gw} value={String(gw)}>
                                   {`Gameweek ${gw}`}
-                                  {gw === gameweekInfo.current?.id && " (Current)"}
+                                  {gw === gameweekInfo.current?.id &&
+                                    " (Current)"}
                                   {gw === gameweekInfo.next?.id && " (Next)"}
                                 </SelectItem>
                               ))
@@ -603,8 +513,10 @@ export default function CreateLeaguePage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    {validation.gameweek && (
-                      <p className="text-sm text-red-400">{validation.gameweek}</p>
+                    {validationErrors?.gameweek && (
+                      <p className="text-sm text-red-400">
+                        {validationErrors.gameweek[0]}
+                      </p>
                     )}
 
                     {/* Informational note */}
@@ -612,16 +524,22 @@ export default function CreateLeaguePage() {
                       <Info className="h-3 w-3 mr-1 mt-0.5 flex-shrink-0" />
                       <span>
                         {gameweekInfo.next
-                          ? `Next gameweek (${gameweekInfo.next.id}) starts ${new Date(gameweekInfo.next.deadline_time).toLocaleDateString()}`
+                          ? `Next gameweek (${
+                              gameweekInfo.next.id
+                            }) starts ${new Date(
+                              gameweekInfo.next.deadline_time
+                            ).toLocaleDateString()}`
                           : gameweekInfo.current
-                            ? `Current gameweek is ${gameweekInfo.current.id}`
-                            : ""}
+                          ? `Current gameweek is ${gameweekInfo.current.id}`
+                          : ""}
                       </span>
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="entryFee" className="text-gray-300">Entry Fee</Label>
+                    <Label htmlFor="entryFee" className="text-gray-300">
+                      Entry Fee
+                    </Label>
                     <div className="relative">
                       <Input
                         id="entryFee"
@@ -630,13 +548,19 @@ export default function CreateLeaguePage() {
                         min="1"
                         max="20000"
                         step="0.01"
-                        value={formData.entryFee}
+                        value={formData.entryFee || ""}
                         onChange={handleInputChange}
-                        className={`bg-gray-800/50 border-gray-700 text-gray-200 focus:border-indigo-600 focus:ring-indigo-600/20 ${validation.entryFee ? "border-red-700 focus:border-red-700" : ""}`}
+                        className={`bg-gray-800/50 border-gray-700 text-gray-200 focus:border-indigo-600 focus:ring-indigo-600/20 ${
+                          validationErrors?.entryFee
+                            ? "border-red-700 focus:border-red-700"
+                            : ""
+                        }`}
                       />
                     </div>
-                    {validation.entryFee && (
-                      <p className="text-sm text-red-400">{validation.entryFee}</p>
+                    {validationErrors?.entryFee && (
+                      <p className="text-sm text-red-400">
+                        {validationErrors.entryFee[0]}
+                      </p>
                     )}
                   </div>
                 </motion.div>
@@ -648,7 +572,9 @@ export default function CreateLeaguePage() {
                   transition={{ duration: 0.4, delay: 0.3 }}
                 >
                   <div className="space-y-2">
-                    <Label htmlFor="maxParticipants" className="text-gray-300">Maximum Participants</Label>
+                    <Label htmlFor="maxParticipants" className="text-gray-300">
+                      Maximum Participants
+                    </Label>
                     <div className="relative">
                       <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-purple-400" />
                       <Input
@@ -657,20 +583,26 @@ export default function CreateLeaguePage() {
                         type="number"
                         min="2"
                         max="10000"
-                        value={formData.maxParticipants}
+                        value={formData.maxParticipants || ""}
                         onChange={handleInputChange}
-                        className={`pl-10 bg-gray-800/50 border-gray-700 text-gray-200 focus:border-indigo-600 focus:ring-indigo-600/20 ${validation.maxParticipants ? "border-red-700 focus:border-red-700" : ""}`}
+                        className={`pl-10 bg-gray-800/50 border-gray-700 text-gray-200 focus:border-indigo-600 focus:ring-indigo-600/20 ${
+                          validationErrors?.maxParticipants
+                            ? "border-red-700 focus:border-red-700"
+                            : ""
+                        }`}
                       />
                     </div>
-                    {validation.maxParticipants && (
+                    {validationErrors?.maxParticipants && (
                       <p className="text-sm text-red-400">
-                        {validation.maxParticipants}
+                        {validationErrors.maxParticipants[0]}
                       </p>
                     )}
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="startDate" className="text-gray-300">Start Date</Label>
+                    <Label htmlFor="startDate" className="text-gray-300">
+                      Start Date
+                    </Label>
                     <div className="relative">
                       <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-cyan-400" />
                       <Input
@@ -679,11 +611,17 @@ export default function CreateLeaguePage() {
                         type="datetime-local"
                         value={formData.startDate}
                         onChange={handleInputChange}
-                        className={`pl-10 bg-gray-800/50 border-gray-700 text-gray-200 focus:border-indigo-600 focus:ring-indigo-600/20 ${validation.startDate ? "border-red-700 focus:border-red-700" : ""}`}
+                        className={`pl-10 bg-gray-800/50 border-gray-700 text-gray-200 focus:border-indigo-600 focus:ring-indigo-600/20 ${
+                          validationErrors?.startDate
+                            ? "border-red-700 focus:border-red-700"
+                            : ""
+                        }`}
                       />
                     </div>
-                    {validation.startDate && (
-                      <p className="text-sm text-red-400">{validation.startDate}</p>
+                    {validationErrors?.startDate && (
+                      <p className="text-sm text-red-400">
+                        {validationErrors.startDate}
+                      </p>
                     )}
                   </div>
                 </motion.div>
@@ -698,7 +636,9 @@ export default function CreateLeaguePage() {
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex items-center">
                     <Sparkles className="h-4 w-4 mr-2 text-yellow-400" />
-                    <Label className="text-gray-200 font-medium">Prize Distribution</Label>
+                    <Label className="text-gray-200 font-medium">
+                      Prize Distribution
+                    </Label>
                   </div>
                   <div className="text-sm bg-indigo-900/30 px-3 py-1.5 rounded-full flex items-center border border-indigo-800/50">
                     <Info className="h-4 w-4 mr-1 text-indigo-400" />
@@ -707,44 +647,44 @@ export default function CreateLeaguePage() {
                     </span>
                   </div>
                 </div>
-
-                {validation.prizeDistribution && (
+                {validationErrors?.prizeDistribution && (
                   <p className="text-sm text-red-400 mb-4">
-                    {validation.prizeDistribution}
+                    {validationErrors.prizeDistribution[0]}
                   </p>
                 )}
 
                 <div className="space-y-3">
                   {formData.prizeDistribution.map((prize, index) => (
-                    <motion.div
-                      key={prize.position}
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: 0.1 * index }}
-                      className="flex items-center space-x-3 p-3 rounded-lg bg-gradient-to-r from-gray-800/50 to-gray-900/50 border border-gray-800"
-                    >
-                      <div className="w-20 flex items-center">
-                        <Trophy className={`h-4 w-4 mr-2 ${prize.position === 1 ? "text-yellow-500" :
-                          prize.position === 2 ? "text-gray-400" :
-                            prize.position === 3 ? "text-amber-700" : "text-gray-500"
-                          }`} />
-                        <div className="text-sm font-medium text-gray-300">
-                          {formData.leagueType === 'jackpot'
-                            ? 'Winner'
-                            : `${prize.position}${getPositionSuffix(prize.position)} Place`}
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <Input
-                          type="number"
-                          min="1"
-                          max="100"
-                          value={prize.percentageShare}
-                          readOnly
-                          className="w-full bg-gray-800/50 border-gray-700 text-gray-200"
-                        />
-                      </div>
-                      <div className="w-8 text-center text-gray-400">%</div>
+                    <motion.div key={index} /* ... */>
+                      {/* Position Label */}
+                      <Label className="w-20 flex items-center">
+                        {" "}
+                        <Trophy />{" "}
+                        {formData.leagueType === "jackpot"
+                          ? "Winner"
+                          : `${prize.position}${getPositionSuffix(
+                              prize.position
+                            )} Place`}{" "}
+                      </Label>
+                      {/* Hidden inputs for Server Action */}
+                      <input
+                        type="hidden"
+                        name={`prizeDistribution[${index}].position`}
+                        value={prize.position}
+                      />
+                      <input
+                        type="hidden"
+                        name={`prizeDistribution[${index}].percentageShare`}
+                        value={prize.percentageShare}
+                      />
+                      {/* Readonly display */}
+                      <Input
+                        type="number"
+                        value={prize.percentageShare}
+                        readOnly
+                        className="..."
+                      />
+                      <div className="w-8 text-center">%</div>
                     </motion.div>
                   ))}
                 </div>
@@ -752,34 +692,25 @@ export default function CreateLeaguePage() {
             </CardContent>
 
             <CardFooter className="flex justify-between pt-6 pb-6 relative z-10 border-t border-gray-800">
-              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => router.push("/leagues/weekly")}
-                  className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-indigo-400"
+                  onClick={() => router.push("/admin/leagues")}
+                  className="..."
                 >
-                  Cancel
+                  {" "}
+                  Cancel{" "}
                 </Button>
               </motion.div>
-              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 border-0"
-                >
-                  {loading ? (
-                    <div className="flex items-center">
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                      Creating...
-                    </div>
-                  ) : (
-                    <div className="flex items-center">
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Create League
-                    </div>
-                  )}
-                </Button>
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <SubmitButton />
               </motion.div>
             </CardFooter>
           </Card>

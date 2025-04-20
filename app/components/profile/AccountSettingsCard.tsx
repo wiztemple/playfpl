@@ -11,7 +11,6 @@ import { Label } from '@/app/components/ui/label';
 import { Switch } from '@/app/components/ui/switch';
 import {
     User,
-    Mail,
     Bell,
     Shield,
     Key,
